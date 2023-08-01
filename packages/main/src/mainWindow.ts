@@ -1,6 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
-import { join } from 'node:path';
-import { URL } from 'node:url';
+import { join, resolve } from 'node:path';
 import { throttle } from 'underscore';
 import { ModbusLoggerTCP, ModbusLoggerRTU, modbusTcpRequest, modbusRtuRequest, ModbusScannerRTU, ModbusScannerTCP, ModbusAnalyzer } from './modbus';
 import { getNetworkInfo } from './networkUtils';
@@ -39,16 +38,25 @@ async function createWindow() {
   });
 
   /**
-   * URL for main window.
-   * Vite dev server for development.
-   * `file://../renderer/index.html` for production and test.
+   * Load the main page of the main window.
    */
-  const pageUrl =
-    import.meta.env.DEV && import.meta.env.VITE_DEV_SERVER_URL !== undefined
-      ? import.meta.env.VITE_DEV_SERVER_URL
-      : new URL('../renderer/dist/index.html', 'file://' + __dirname).toString();
-
-  await browserWindow.loadURL(pageUrl);
+  if (import.meta.env.DEV && import.meta.env.VITE_DEV_SERVER_URL !== undefined) {
+    /**
+     * Load from the Vite dev server for development.
+     */
+    await browserWindow.loadURL(import.meta.env.VITE_DEV_SERVER_URL);
+  } else {
+    /**
+     * Load from the local file system for production and test.
+     *
+     * Use BrowserWindow.loadFile() instead of BrowserWindow.loadURL() for WhatWG URL API limitations
+     * when path contains special characters like `#`.
+     * Let electron handle the path quirks.
+     * @see https://github.com/nodejs/node/issues/12682
+     * @see https://github.com/electron/electron/issues/6869
+     */
+    await browserWindow.loadFile(resolve(__dirname, '../../renderer/dist/index.html'));
+  }
 
   ipcMain.handle('saveCSV', async (_event, data, source: null | string) => {
     console.log('Will save file!');
