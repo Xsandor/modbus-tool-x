@@ -2,12 +2,19 @@
 
 import {chrome} from '../../.electron-vendors.cache.json';
 import vue from '@vitejs/plugin-vue';
+import vueJsx from '@vitejs/plugin-vue-jsx';
+import Icons from 'unplugin-icons/vite';
+import IconsResolver from 'unplugin-icons/resolver';
+import AutoImport from 'unplugin-auto-import/vite';
+import Components from 'unplugin-vue-components/vite';
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers';
 import {renderer} from 'unplugin-auto-expose';
-import {join} from 'node:path';
+import path, { join } from 'node:path';
 import {injectAppVersion} from '../../version/inject-app-version-plugin.mjs';
 
 const PACKAGE_ROOT = __dirname;
 const PROJECT_ROOT = join(PACKAGE_ROOT, '../..');
+const pathSrc = path.resolve(__dirname, 'src');
 
 /**
  * @type {import('vite').UserConfig}
@@ -44,6 +51,40 @@ const config = {
   },
   plugins: [
     vue(),
+    vueJsx(),
+    AutoImport({
+      // Auto import functions from Vue, e.g. ref, reactive, toRef...
+      imports: ['vue'],
+
+      // Auto import functions from Element Plus, e.g. ElMessage, ElMessageBox... (with style)
+      resolvers: [
+        ElementPlusResolver(),
+
+        // Auto import icon components
+        IconsResolver({
+          prefix: 'Icon',
+        }),
+      ],
+
+      dts: path.resolve(pathSrc, 'auto-imports.d.ts'),
+    }),
+
+    Components({
+      resolvers: [
+        // Auto register icon components
+        IconsResolver({
+          enabledCollections: ['ep'],
+        }),
+        // Auto register Element Plus components
+        ElementPlusResolver(),
+      ],
+
+      dts: path.resolve(pathSrc, 'components.d.ts'),
+    }),
+
+    Icons({
+      autoInstall: true,
+    }),
     renderer.vite({
       preloadEntry: join(PACKAGE_ROOT, '../preload/src/index.ts'),
     }),
