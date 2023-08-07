@@ -15,18 +15,18 @@
           label-width="120px"
         >
           <ElFormItem label="Connection Type">
-            <ElRadioGroup v-model.number="connectionType">
+            <ElRadioGroup v-model.number="modbusStore.clientConfiguration.connectionType">
               <ElRadioButton label="0">Modbus RTU</ElRadioButton>
               <ElRadioButton label="1">Modbus TCP</ElRadioButton>
             </ElRadioGroup>
           </ElFormItem>
-          <template v-if="connectionType === CONNECTION_TYPE.TCP">
+          <template v-if="modbusStore.clientConfiguration.connectionType === CONNECTION_TYPE.TCP">
             <ElFormItem
               label="IP Address"
               prop="ip"
             >
               <ElInput
-                v-model="tcpConfiguration.ip"
+                v-model="modbusStore.clientConfiguration.tcp.ip"
                 required
                 type="text"
                 placeholder="Input IP address"
@@ -34,7 +34,7 @@
             </ElFormItem>
             <ElFormItem label="Port">
               <ElInput
-                v-model.number="tcpConfiguration.port"
+                v-model.number="modbusStore.clientConfiguration.tcp.port"
                 type="number"
                 min="1"
                 max="65535"
@@ -42,7 +42,7 @@
             </ElFormItem>
             <ElFormItem label="Timeout">
               <ElInput
-                v-model.number="tcpConfiguration.timeout"
+                v-model.number="modbusStore.clientConfiguration.tcp.timeout"
                 type="number"
                 min="1"
                 max="60000"
@@ -54,11 +54,11 @@
           <template v-else>
             <ElFormItem label="COM port">
               <ElSelect
-                v-model="rtuConfiguration.port"
+                v-model="modbusStore.clientConfiguration.rtu.port"
                 placeholder="Select port"
               >
                 <ElOption
-                  v-for="item in comPorts"
+                  v-for="item in modbusStore.comPorts"
                   :key="item.path"
                   :label="item.path"
                   :value="item.path"
@@ -67,11 +67,11 @@
             </ElFormItem>
             <ElFormItem label="Baud rate">
               <ElSelect
-                v-model.number="rtuConfiguration.baudRate"
+                v-model.number="modbusStore.clientConfiguration.rtu.baudRate"
                 placeholder="Select baudRate"
               >
                 <ElOption
-                  v-for="item in baudRateOptions"
+                  v-for="item in modbusStore.baudRateOptions"
                   :key="item.value"
                   :label="item.label"
                   :value="item.value"
@@ -80,11 +80,11 @@
             </ElFormItem>
             <ElFormItem label="Parity">
               <ElSelect
-                v-model="rtuConfiguration.parity"
+                v-model="modbusStore.clientConfiguration.rtu.parity"
                 placeholder="Select parity"
               >
                 <ElOption
-                  v-for="item in parityOptions"
+                  v-for="item in modbusStore.parityOptions"
                   :key="item.value"
                   :label="item.label"
                   :value="item.value"
@@ -93,21 +93,21 @@
             </ElFormItem>
             <ElFormItem label="Data bits">
               <ElInputNumber
-                v-model.number="rtuConfiguration.dataBits"
+                v-model.number="modbusStore.clientConfiguration.rtu.dataBits"
                 :min="6"
                 :max="8"
               />
             </ElFormItem>
             <ElFormItem label="Stop bits">
               <ElInputNumber
-                v-model.number="rtuConfiguration.stopBits"
+                v-model.number="modbusStore.clientConfiguration.rtu.stopBits"
                 :min="1"
                 :max="2"
               />
             </ElFormItem>
             <ElFormItem label="Timeout">
               <ElInput
-                v-model.number="rtuConfiguration.timeout"
+                v-model.number="modbusStore.clientConfiguration.rtu.timeout"
                 :min="1"
                 :max="60000"
               >
@@ -118,14 +118,14 @@
           <ElDivider></ElDivider>
           <ElFormItem label="Unit ID">
             <ElInputNumber
-              v-model.number="commonConfiguration.unitId"
+              v-model.number="modbusStore.clientConfiguration.common.unitId"
               :min="0"
               :max="254"
             />
           </ElFormItem>
           <ElFormItem label="Modbus Function">
             <ElSelect
-              v-model="mbFunction"
+              v-model="modbusStore.clientConfiguration.common.mbFunction"
               placeholder="Modbus function"
             >
               <ElOption
@@ -137,7 +137,7 @@
             </ElSelect>
           </ElFormItem>
           <ElFormItem
-            v-for="parameter in mbOptions"
+            v-for="parameter in modbusStore.mbOptions"
             :key="parameter.id"
             :label="parameter.label"
           >
@@ -166,7 +166,7 @@
           </ElFormItem>
           <ElTable
             :data="tasks"
-            border
+            :border="true"
             empty-text="No tasks configured"
           >
             <ElTableColumn
@@ -268,14 +268,12 @@
               <!-- ({{ stats.requestsTimedOut }} out of {{ stats.requestsDone }}) -->
             </ElDescriptionsItem>
             <ElDescriptionsItem label="Average response">
-              {{
-                stats.averageResponseTime.toFixed(0)
-              }} ms
+              {{ stats.averageResponseTime.toFixed(0) }} ms
             </ElDescriptionsItem>
           </ElDescriptions>
           <ElDivider></ElDivider>
           <ElAutoResizer>
-            <template #default="{ width }">
+            <template #default="{width}">
               <ElTableV2
                 :columns="columns"
                 :data="results"
@@ -300,303 +298,268 @@
 </template>
 
 <script lang="tsx" setup>
-  import { csv, logger } from '#preload';
-  import useModbus from '/@/components/useModbus';
-  import useComPorts from '/@/components/useComPorts';
-  import * as Papa from 'papaparse';
-  // import useToast from '/@/components/useToast'
+import {csv, logger} from '#preload';
+import {CONNECTION_TYPE, mbFunctions, useModbusStore} from '/@/components/useModbus';
 
-  const { comPorts } = await useComPorts();
-  // const { toast } = useToast()
-  const { mbFunctions, parityOptions, baudRateOptions, connectionType, tcpConfiguration, rtuConfiguration, CONNECTION_TYPE } = useModbus();
+import * as Papa from 'papaparse';
+// import useToast from '/@/components/useToast'
 
-  // console.log(ipcRenderer)
+const modbusStore = useModbusStore();
+// console.log(ipcRenderer)
 
-  const columns = [
-    {
-      key: 'id',
-      dataKey: 'id',
-      title: 'ID',
-      width: 50,
-    },
-    {
-      key: 'unitId',
-      dataKey: 'unitId',
-      title: 'Unit ID',
-      width: 100,
-    },
-    {
-      key: 'mbFunction',
-      dataKey: 'mbFunction',
-      title: 'Function',
-      width: 100,
-    },
-    {
-      key: 'mbAddr',
-      dataKey: 'mbAddr',
-      title: 'Register',
-      width: 100,
-    },
-    {
-      key: 'result',
-      dataKey: 'result',
-      title: 'Values',
-      width: 150,
-      cellRenderer: ({ cellData: result }: { cellData: { value: number }[] }) => <div class="el-table-v2__cell-text">{(result || []).map(i => i.value).join(', ')}</div>,
-    },
-    {
-      key: 'errorText',
-      dataKey: 'errorText',
-      title: 'Error',
-      width: 100,
-    },
-    {
-      key: 'executionTime',
-      dataKey: 'executionTime',
-      title: 'Response',
-      width: 100,
-      cellRenderer: ({ cellData: executionTime }: { cellData: number }) => <div class="el-table-v2__cell-text">{executionTime.toFixed(0)} ms</div>,
-    },
-  ];
+const columns = [
+  {
+    key: 'id',
+    dataKey: 'id',
+    title: 'ID',
+    width: 50,
+  },
+  {
+    key: 'unitId',
+    dataKey: 'unitId',
+    title: 'Unit ID',
+    width: 100,
+  },
+  {
+    key: 'mbFunction',
+    dataKey: 'mbFunction',
+    title: 'Function',
+    width: 100,
+  },
+  {
+    key: 'mbAddr',
+    dataKey: 'mbAddr',
+    title: 'Register',
+    width: 100,
+  },
+  {
+    key: 'result',
+    dataKey: 'result',
+    title: 'Values',
+    width: 150,
+    cellRenderer: ({cellData: result}: {cellData: {value: number}[]}) => (
+      <div class="el-table-v2__cell-text">{(result || []).map(i => i.value).join(', ')}</div>
+    ),
+  },
+  {
+    key: 'errorText',
+    dataKey: 'errorText',
+    title: 'Error',
+    width: 100,
+  },
+  {
+    key: 'executionTime',
+    dataKey: 'executionTime',
+    title: 'Response',
+    width: 100,
+    cellRenderer: ({cellData: executionTime}: {cellData: number}) => (
+      <div class="el-table-v2__cell-text">{executionTime.toFixed(0)} ms</div>
+    ),
+  },
+];
 
-  const results: Ref<GenericObject[]> = ref([]);
+const results: Ref<GenericObject[]> = ref([]);
 
-  const loggerError: Ref<string> = ref('');
+const loggerError: Ref<string> = ref('');
 
-  const stats: Ref<LogStats> = ref({
+const stats: Ref<LogStats> = ref({
+  averageResponseTime: 0,
+  successfulRequests: 0,
+  requestsTimedOut: 0,
+  requestsDone: 0,
+  requestsTotal: 0,
+  progress: 0,
+});
+
+const statsSuccessPct = computed(() => {
+  if (!stats.value.requestsDone) return 0;
+  return (stats.value.successfulRequests / stats.value.requestsDone) * 100;
+});
+
+const statsTimedOutPct = computed(() => {
+  if (!stats.value.requestsDone) return 0;
+  return (stats.value.requestsTimedOut / stats.value.requestsDone) * 100;
+});
+
+const colorGoodProgress = [
+  {color: '#f56c6c', percentage: 0},
+  {color: '#e6a23c', percentage: 30},
+  {color: '#bfda01', percentage: 60},
+  {color: '#67c23a', percentage: 90},
+];
+
+const colorBadProgress = [
+  {color: '#67c23a', percentage: 0},
+  {color: '#bfda01', percentage: 10},
+  {color: '#e6a23c', percentage: 30},
+  {color: '#f56c6c', percentage: 50},
+];
+
+const ruleFormRef = ref();
+
+// const rules = reactive({
+//   ip: [
+//     { required: true, message: 'Please input an IP address', trigger: 'blur' },
+//   ],
+// });
+
+function clearLog() {
+  loggerError.value = '';
+  results.value = [];
+  stats.value = {
     averageResponseTime: 0,
     successfulRequests: 0,
     requestsTimedOut: 0,
     requestsDone: 0,
     requestsTotal: 0,
     progress: 0,
-  });
+  };
+}
 
-  const statsSuccessPct = computed(() => {
-    if (!stats.value.requestsDone) return 0;
-    return stats.value.successfulRequests / stats.value.requestsDone * 100;
-  });
+const requestCount = ref(10);
+const requestDelay = ref(10);
 
-  const statsTimedOutPct = computed(() => {
-    if (!stats.value.requestsDone) return 0;
-    return stats.value.requestsTimedOut / stats.value.requestsDone * 100;
-  });
+const tasks: Ref<ModbusTask[]> = ref([]);
 
-  const colorGoodProgress = [
-    { color: '#f56c6c', percentage: 0 },
-    { color: '#e6a23c', percentage: 30 },
-    { color: '#bfda01', percentage: 60 },
-    { color: '#67c23a', percentage: 90 },
-  ];
+function addTask() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const options = modbusStore.mbOptions.reduce((acc: {[key: string]: any}, item) => {
+    acc[item.id] = item.value;
+    return acc;
+  }, {});
 
-  const colorBadProgress = [
-    { color: '#67c23a', percentage: 0 },
-    { color: '#bfda01', percentage: 10 },
-    { color: '#e6a23c', percentage: 30 },
-    { color: '#f56c6c', percentage: 50 },
-  ];
+  const task: ModbusTask = {
+    unitId: modbusStore.clientConfiguration.common.unitId,
+    mbFunction: modbusStore.clientConfiguration.common.mbFunction,
+    mbOptions: {
+      ...options,
+    },
+  };
 
-  const ruleFormRef = ref();
+  console.log(task);
 
-  // const rules = reactive({
-  //   ip: [
-  //     { required: true, message: 'Please input an IP address', trigger: 'blur' },
-  //   ],
-  // });
+  tasks.value.push(task);
+  console.log(tasks.value);
+}
 
-  function clearLog() {
-    loggerError.value = '';
-    results.value = [];
-    stats.value = {
-      averageResponseTime: 0,
-      successfulRequests: 0,
-      requestsTimedOut: 0,
-      requestsDone: 0,
-      requestsTotal: 0,
-      progress: 0,
-    };
-  }
+function clearTasks() {
+  tasks.value = [];
+}
 
-  const requestCount = ref(10);
-  const requestDelay = ref(10);
+// const resultText = computed(() => {
+//   if (!results.value.length) {
+//     return '';
+//   }
+//   const succeededRequests = results.value.reduce((success, item) => {
+//     if (!item.errorCode) {
+//       success++;
+//     }
+//     return success;
+//   }, 0);
 
-  const commonConfiguration = ref({
-    unitId: 1,
-  });
+//   const successPercent = Math.round(succeededRequests / results.value.length * 100);
 
-  const tasks: Ref<ModbusTask[]> = ref([]);
+//   return `${successPercent}% success (${succeededRequests} / ${results.value.length})`;
+// });
 
-  function addTask() {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const options = mbOptions.value.reduce((acc: { [key: string]: any; }, item) => {
-      acc[item.id] = item.value;
-      return acc;
-    }, {});
-
-    const task: ModbusTask = {
-      unitId: commonConfiguration.value.unitId,
-      mbFunction: mbFunction.value,
-      mbOptions: {
-        ...options,
-      },
-    };
-
-    console.log(task);
-
-    tasks.value.push(task);
-    console.log(tasks.value);
-  }
-
-  function clearTasks() {
-    tasks.value = [];
-  }
-
-  // const resultText = computed(() => {
-  //   if (!results.value.length) {
-  //     return '';
-  //   }
-  //   const succeededRequests = results.value.reduce((success, item) => {
-  //     if (!item.errorCode) {
-  //       success++;
-  //     }
-  //     return success;
-  //   }, 0);
-
-  //   const successPercent = Math.round(succeededRequests / results.value.length * 100);
-
-  //   return `${successPercent}% success (${succeededRequests} / ${results.value.length})`;
-  // });
-
-  const mbFunction = ref(mbFunctions[2].id);
-
-  const mbOptions: Ref<MbOption[]> = ref([]);
-
-  const selectedMbFunction = computed(() => {
-    if (!mbFunction.value) {
-      return null;
-    }
-
-    return mbFunctions.find(i => i.id === mbFunction.value);
-  });
-
-  function updateMbOptions() {
-    const modbusFunction = selectedMbFunction.value;
-
-    if (!modbusFunction) {
-      mbOptions.value = [];
-      return;
-    }
-
-    mbOptions.value = modbusFunction.parameters.map(i => {
-      return {
-        ...i,
-        value: i.default,
-      };
-    });
-  }
-
-  watch(mbFunction, () => {
-    updateMbOptions();
-  });
-
-  function exportLog() {
-    console.log('Trying to save file');
-    const text = Papa.unparse(results.value.map(i => {
+function exportLog() {
+  console.log('Trying to save file');
+  const text = Papa.unparse(
+    results.value.map(i => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = (i.result || []).map((j: any) => j.value).join(', ');
       return {
         ...i,
         result,
       };
-    }));
+    }),
+  );
 
-    csv.save(text, 'Modbus Logger');
+  csv.save(text, 'Modbus Logger');
+}
+
+logger.onLog((_event, logs: LoggerLogMessage[]) => {
+  console.log(logs);
+  logs.forEach(message => {
+    // console.log(message.request)
+    stats.value = message.stats;
+    results.value.unshift(message.request);
+  });
+});
+
+const performRequest = async () => {
+  clearLog();
+
+  if (!tasks.value.length) {
+    addTask();
+  }
+  // if (!form) return
+  // await form.validate((valid, fields) => {
+  //     if (valid) {
+  //         console.log('submit!')
+  //     } else {
+  //         console.log('error submit!', fields)
+  //     }
+  // })
+  // return
+  // console.log('Will perform modbus request')
+  if (modbusStore.clientConfiguration.connectionType === CONNECTION_TYPE.TCP) {
+    // console.log('Modbus TCP')
+    const configuration = {
+      ...modbusStore.clientConfiguration.tcp,
+      tasks: tasks.value.map(i => JSON.parse(JSON.stringify(i))),
+    };
+
+    // console.log(configuration)
+    const config: TcpLoggerConfiguration = {
+      ...configuration,
+      count: requestCount.value,
+      delay: requestDelay.value,
+    };
+    console.log('Starting logger');
+    logger.startTcp(config);
+  } else if (modbusStore.clientConfiguration.connectionType === CONNECTION_TYPE.RTU) {
+    // console.log('Modbus RTU')
+    // console.log(tasks.value)
+    const configuration = {
+      ...modbusStore.clientConfiguration.rtu,
+      tasks: tasks.value.map(i => JSON.parse(JSON.stringify(i))),
+    };
+
+    const config: RtuLoggerConfiguration = {
+      ...configuration,
+      count: requestCount.value,
+      delay: requestDelay.value,
+    };
+    // console.log(config)
+    console.log('Starting logger');
+    const {_result, error} = await logger.startRtu(config);
+    if (error) {
+      loggerError.value = error;
+    }
+  }
+};
+
+// function downloadLog() {
+//   const data = results.value
+//   const csv = Papa.unparse(data);
+//   console.log(csv)
+// }
+
+onMounted(async () => {
+  console.log('Component is mounted!');
+  // console.log(ipcRenderer)
+});
+
+function formatMbOptions(mbOptions: GenericObject[]) {
+  if ('addr' in mbOptions && 'count' in mbOptions) {
+    const {addr, count} = mbOptions as {addr: number; count: number};
+    if (count === 1) return addr;
+    return `${addr} - ${addr + count - 1}`;
   }
 
-  logger.onLog((_event, logs: LoggerLogMessage[]) => {
-    console.log(logs);
-    logs.forEach((message) => {
-      // console.log(message.request)
-      stats.value = message.stats;
-      results.value.unshift(message.request);
-    });
-  });
-
-  const performRequest = async () => {
-    clearLog();
-
-    if (!tasks.value.length) {
-      addTask();
-    }
-    // if (!form) return
-    // await form.validate((valid, fields) => {
-    //     if (valid) {
-    //         console.log('submit!')
-    //     } else {
-    //         console.log('error submit!', fields)
-    //     }
-    // })
-    // return
-    // console.log('Will perform modbus request')
-    if (connectionType.value === CONNECTION_TYPE.TCP) {
-      // console.log('Modbus TCP')
-      const configuration = {
-        ...tcpConfiguration.value,
-        tasks: tasks.value.map(i => JSON.parse(JSON.stringify(i))),
-      };
-
-      // console.log(configuration)
-      const config: TcpLoggerConfiguration = {
-        ...configuration,
-        count: requestCount.value,
-        delay: requestDelay.value,
-      };
-      console.log('Starting logger');
-      logger.startTcp(config);
-    } else if (connectionType.value === CONNECTION_TYPE.RTU) {
-      // console.log('Modbus RTU')
-      // console.log(tasks.value)
-      const configuration = {
-        ...rtuConfiguration.value,
-        tasks: tasks.value.map(i => JSON.parse(JSON.stringify(i))),
-      };
-
-      const config: RtuLoggerConfiguration = {
-        ...configuration,
-        count: requestCount.value,
-        delay: requestDelay.value,
-      };
-      // console.log(config)
-      console.log('Starting logger');
-      const { _result, error } = await logger.startRtu(config);
-      if (error) {
-        loggerError.value = error;
-      }
-    }
-  };
-
-  // function downloadLog() {
-  //   const data = results.value
-  //   const csv = Papa.unparse(data);
-  //   console.log(csv)
-  // }
-
-  onMounted(async () => {
-    console.log('Component is mounted!');
-    // console.log(ipcRenderer)
-    updateMbOptions();
-    rtuConfiguration.value.port = comPorts.value[0].path;
-  });
-
-  function formatMbOptions(mbOptions: GenericObject[]) {
-    if ('addr' in mbOptions && 'count' in mbOptions) {
-      const { addr, count } = mbOptions as { addr: number, count: number };
-      if (count === 1) return addr;
-      return `${addr} - ${addr + count - 1}`;
-    }
-
-    return JSON.stringify(mbOptions);
-  }
+  return JSON.stringify(mbOptions);
+}
 </script>
 
 <style>

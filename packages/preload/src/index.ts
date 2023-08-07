@@ -45,8 +45,11 @@ export const analyzer = {
 };
 
 export const server = {
-  start: async () => {
-    return ipcRenderer.invoke('startServer');
+  startRtu: async (config: SerialPortConfiguration) => {
+    return ipcRenderer.invoke('startRtuServer', config);
+  },
+  stopRtu: async () => {
+    return ipcRenderer.invoke('stopRtuServer');
   },
   getData: async (serverDataRequest: ServerDataRequest) => {
     return ipcRenderer.invoke('getServerData', serverDataRequest);
@@ -107,5 +110,16 @@ export const modbus = {
 export const serial = {
   getComPorts: async (): Promise<ComPort[]> => {
     return await ipcRenderer.invoke('getComPorts');
+  },
+};
+
+export const store = {
+  get: (key: string) => {
+    console.log('Someone is getting the value for key:', key, ' in from the electron store');
+    return ipcRenderer.sendSync('electron-store-get', key);
+  },
+  set: (key: string, val: any) => {
+    console.log('Someone is setting the value for key:', key, ' in the electron store to:', val);
+    ipcRenderer.send('electron-store-set', key, val);
   },
 };

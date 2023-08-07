@@ -15,22 +15,22 @@
           label-width="120px"
         >
           <el-form-item label="Connection Type">
-            <el-radio-group v-model.number="connectionType">
+            <el-radio-group v-model.number="modbusStore.clientConfiguration.connectionType">
               <el-radio-button label="0">Modbus RTU</el-radio-button>
               <el-radio-button label="1">Modbus TCP</el-radio-button>
             </el-radio-group>
           </el-form-item>
-          <template v-if="connectionType === CONNECTION_TYPE.TCP">
+          <template v-if="modbusStore.clientConfiguration.connectionType === CONNECTION_TYPE.TCP">
             <el-form-item label="IP Address">
               <el-input
-                v-model="tcpConfiguration.ip"
+                v-model="modbusStore.clientConfiguration.tcp.ip"
                 type="text"
                 placeholder="Input IP address"
               />
             </el-form-item>
             <el-form-item label="Port">
               <el-input
-                v-model.number="tcpConfiguration.port"
+                v-model.number="modbusStore.clientConfiguration.tcp.port"
                 type="number"
                 min="1"
                 max="65535"
@@ -38,7 +38,7 @@
             </el-form-item>
             <el-form-item label="Timeout">
               <el-input
-                v-model.number="tcpConfiguration.timeout"
+                v-model.number="modbusStore.clientConfiguration.tcp.timeout"
                 type="number"
                 min="1"
                 max="60000"
@@ -50,11 +50,11 @@
           <template v-else>
             <el-form-item label="COM port">
               <el-select
-                v-model="rtuConfiguration.port"
+                v-model="modbusStore.clientConfiguration.rtu.port"
                 placeholder="Select port"
               >
                 <el-option
-                  v-for="item in comPorts"
+                  v-for="item in modbusStore.comPorts"
                   :key="item.path"
                   :label="item.path"
                   :value="item.path"
@@ -63,11 +63,11 @@
             </el-form-item>
             <el-form-item label="Baud rate">
               <el-select
-                v-model.number="rtuConfiguration.baudRate"
+                v-model.number="modbusStore.clientConfiguration.rtu.baudRate"
                 placeholder="Select baudRate"
               >
                 <el-option
-                  v-for="item in baudRateOptions"
+                  v-for="item in modbusStore.baudRateOptions"
                   :key="item.value"
                   :label="item.label"
                   :value="item.value"
@@ -76,11 +76,11 @@
             </el-form-item>
             <el-form-item label="Parity">
               <el-select
-                v-model="rtuConfiguration.parity"
+                v-model="modbusStore.clientConfiguration.rtu.parity"
                 placeholder="Select parity"
               >
                 <el-option
-                  v-for="item in parityOptions"
+                  v-for="item in modbusStore.parityOptions"
                   :key="item.value"
                   :label="item.label"
                   :value="item.value"
@@ -89,7 +89,7 @@
             </el-form-item>
             <el-form-item label="Data bits">
               <el-input-number
-                v-model.number="rtuConfiguration.dataBits"
+                v-model.number="modbusStore.clientConfiguration.rtu.dataBits"
                 type="number"
                 :min="6"
                 :max="8"
@@ -97,7 +97,7 @@
             </el-form-item>
             <el-form-item label="Stop bits">
               <el-input-number
-                v-model.number="rtuConfiguration.stopBits"
+                v-model.number="modbusStore.clientConfiguration.rtu.stopBits"
                 type="number"
                 :min="1"
                 :max="2"
@@ -105,7 +105,7 @@
             </el-form-item>
             <el-form-item label="Timeout">
               <el-input
-                v-model.number="rtuConfiguration.timeout"
+                v-model.number="modbusStore.clientConfiguration.rtu.timeout"
                 type="number"
                 :min="1"
                 :max="60000"
@@ -117,7 +117,7 @@
           <el-divider></el-divider>
           <el-form-item label="Unit ID">
             <el-input-number
-              v-model.number="commonConfiguration.unitId"
+              v-model.number="modbusStore.clientConfiguration.common.unitId"
               type="number"
               :min="0"
               :max="254"
@@ -125,7 +125,7 @@
           </el-form-item>
           <el-form-item label="Modbus Function">
             <el-select
-              v-model="mbFunction"
+              v-model="modbusStore.clientConfiguration.common.mbFunction"
               placeholder="Modbus function"
             >
               <el-option
@@ -137,7 +137,7 @@
             </el-select>
           </el-form-item>
           <el-form-item
-            v-for="parameter in mbOptions"
+            v-for="parameter in modbusStore.mbOptions"
             :key="parameter.id"
             :label="parameter.label"
           >
@@ -167,9 +167,7 @@
       :xl="6"
     >
       <el-card>
-        <template #header>
-          Result
-        </template>
+        <template #header> Result </template>
         <el-result
           v-if="response && response.errorText"
           icon="error"
@@ -180,25 +178,21 @@
           <template v-if="response && response.result && response.result.length">
             <el-descriptions
               :column="1"
-              border
+              :border="true"
             >
               <el-descriptions-item
                 v-if="response.timestamp"
                 width="120px"
                 label="Timestamp"
               >
-                {{
-                  response.timestamp.toLocaleTimeString()
-                }}
+                {{ response.timestamp.toLocaleTimeString() }}
               </el-descriptions-item>
               <el-descriptions-item
                 v-if="response.executionTime"
                 width="120px"
                 label="Response time"
               >
-                {{
-                  response.executionTime.toFixed(2)
-                }}
+                {{ response.executionTime.toFixed(2) }}
                 ms
               </el-descriptions-item>
             </el-descriptions>
@@ -230,102 +224,94 @@
 </template>
 
 <script lang="ts" setup>
-  import { modbus } from '#preload';
-  import useModbus from '/@/components/useModbus';
-  import useComPorts from '/@/components/useComPorts';
+import {modbus} from '#preload';
+import {CONNECTION_TYPE, mbFunctions, useModbusStore} from '/@/components/useModbus';
 
-  const { comPorts } = await useComPorts();
-  const { mbFunctions, parityOptions, baudRateOptions, connectionType, tcpConfiguration, rtuConfiguration, CONNECTION_TYPE } = useModbus();
+const modbusStore = useModbusStore();
 
-  const response: Ref<ModbusRequestResponse | null> = ref(null);
+const response: Ref<ModbusRequestResponse | null> = ref(null);
 
-  function cancel() {
-    response.value = null;
-  }
+function cancel() {
+  response.value = null;
+}
 
-  const commonConfiguration = ref({
-    unitId: 1,
-  });
+const performRequest = async () => {
+  // console.log('Will perform modbus request')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const options = modbusStore.mbOptions.reduce((acc: {[key: string]: any}, item) => {
+    acc[item.id] = item.value;
+    return acc;
+  }, {});
 
-  const mbFunction = ref(mbFunctions[2].id);
-  const mbOptions: Ref<MbOption[]> = ref([]);
-
-  const selectedMbFunction = computed(() => {
-    if (!mbFunction.value) {
-      return null;
-    }
-
-    return mbFunctions.find(i => i.id === mbFunction.value);
-  });
-
-  function updateMbOptions() {
-    const modbusFunction = selectedMbFunction.value;
-
-    if (!modbusFunction) {
-      mbOptions.value = [];
-      return;
-    }
-
-    mbOptions.value = modbusFunction.parameters.map(i => {
-      return {
-        ...i,
-        value: i.default,
-      };
-    });
-  }
-
-  watch(mbFunction, () => {
-    updateMbOptions();
-  });
-
-  const performRequest = async () => {
-    // console.log('Will perform modbus request')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const options = mbOptions.value.reduce((acc: { [key: string]: any; }, item) => {
-      acc[item.id] = item.value;
-      return acc;
-    }, {});
-
-    const task: ModbusTask = {
-      unitId: commonConfiguration.value.unitId,
-      mbFunction: mbFunction.value,
-      mbOptions: {
-        ...options,
-      },
-    };
-
-    if (connectionType.value === CONNECTION_TYPE.TCP) {
-      const configuration = {
-        ...tcpConfiguration.value,
-        task,
-      };
-
-      console.log(configuration);
-
-      const result = await modbus.tcpRequest(configuration);
-      // console.log(result)
-      response.value = result;
-    } else if (connectionType.value === CONNECTION_TYPE.RTU) {
-      const configuration = {
-        ...rtuConfiguration.value,
-        task,
-      };
-
-      console.log(configuration);
-
-      const result = await modbus.rtuRequest(configuration);
-      // console.log(result)
-      response.value = result;
-    }
+  const task: ModbusTask = {
+    unitId: modbusStore.clientConfiguration.common.unitId,
+    mbFunction: modbusStore.clientConfiguration.common.mbFunction,
+    mbOptions: {
+      ...options,
+    },
   };
 
-  onMounted(async () => {
-    // console.log('Component is mounted!')
-    updateMbOptions();
-    rtuConfiguration.value.port = comPorts.value[0].path;
-  });
+  if (modbusStore.clientConfiguration.connectionType === CONNECTION_TYPE.TCP) {
+    const configuration = {
+      ...modbusStore.clientConfiguration.tcp,
+      task,
+    };
+
+    console.log(configuration);
+
+    const result = await modbus.tcpRequest(configuration);
+    console.log(result);
+    response.value = result;
+  } else if (modbusStore.clientConfiguration.connectionType === CONNECTION_TYPE.RTU) {
+    const configuration = {
+      ...modbusStore.clientConfiguration.rtu,
+      task,
+    };
+
+    console.log(configuration);
+
+    const result = await modbus.rtuRequest(configuration);
+    // console.log(result)
+    response.value = result;
+  }
+};
+
+// function clone<T>(obj: T): T {
+//   return JSON.parse(JSON.stringify(obj));
+// }
+
+onMounted(async () => {
+  // console.log('Component is mounted!')
+  // const savedTcpConfiguration = store.get('tcpConfiguration');
+  // tcpConfiguration.value = {
+  // ...tcpConfiguration.value,
+  // ...savedTcpConfiguration,
+  // };
+  // watch(tcpConfiguration.value, () => {
+  // store.set('tcpConfiguration', clone(tcpConfiguration.value));
+  // });
+  // const savedRtuConfiguration = store.get('rtuConfiguration');
+  // rtuConfiguration.value = {
+  // ...rtuConfiguration.value,
+  // ...savedRtuConfiguration,
+  // };
+  // const savedPort = rtuConfiguration.value.port;
+  // const portExists = comPorts.value.find(i => i.path === savedPort);
+  // if (!savedPort || !portExists) {
+  // console.log('Taking first comport from list');
+  // rtuConfiguration.value.port = comPorts.value[0].path;
+  // }
+  // watch(rtuConfiguration.value, () => {
+  //   store.set('rtuConfiguration', clone(rtuConfiguration.value));
+  // });
+  // const savedConnectionType = store.get('connectionType');
+  // if (savedConnectionType) {
+  //   connectionType.value = savedConnectionType;
+  // }
+  // watch(connectionType, () => {
+  //   store.set('connectionType', clone(connectionType.value));
+  // });
+});
 </script>
 
-<style scoped>
-
-</style>
+<style scoped></style>

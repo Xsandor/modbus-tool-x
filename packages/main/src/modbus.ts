@@ -2,7 +2,7 @@
 /* eslint-disable no-case-declarations */
 /* eslint-disable no-fallthrough */
 import ModbusRTU from 'modbus-serial';
-import{ SerialPort } from 'serialport';
+import { SerialPort } from 'serialport';
 import { InterByteTimeoutParser } from '@serialport/parser-inter-byte-timeout';
 import { Semaphore } from 'async-mutex';
 import { EventEmitter } from 'events';
@@ -53,7 +53,7 @@ enum MB_FUNCTION {
   EXCEPTION_READ_COMPRESSED = EXCEPTION_CODE + READ_COMPRESSED
 }
 
-const EXCEPTION_CODES: { [key: number]: string} = {
+const EXCEPTION_CODES: { [key: number]: string } = {
   1: 'Illegal Function',
   2: 'Illegal Data Address',
   3: 'Illegal Data Value',
@@ -82,7 +82,7 @@ enum FRAME_TYPE {
 
 function formatByteArray(byteArray: Buffer) {
   const string = byteArray.reduce((string, byte) => {
-    string += byte.toString(16).padStart(2, '0');  
+    string += byte.toString(16).padStart(2, '0');
     string += ' ';
     return string;
   }, '');
@@ -123,7 +123,7 @@ function requestOrResponse(frame: MyModbusFrame, previousFrame: null | MyModbusF
     case MB_FUNCTION.READ_HOLDING_REGISTERS:
     case MB_FUNCTION.READ_COMPRESSED:
       const bytesToRead = frame.data.readUint8(0);
-      if (frame.data.byteLength - 1 === bytesToRead){
+      if (frame.data.byteLength - 1 === bytesToRead) {
         return FRAME_TYPE.RESPONSE;
       }
       return FRAME_TYPE.REQUEST;
@@ -272,7 +272,7 @@ function parseData(frame: MyModbusFrame, previousFrame: null | MyModbusFrame) {
           }
           if (responseDataLength === 0x12 && subReqResponseLength === 0x11 && refType === 7) {
             // console.log("Response: Read order number")
-            const [orderNumber, protocolFamily] = data.toString().replace(/\0.*$/g,'').split(' ');
+            const [orderNumber, protocolFamily] = data.toString().replace(/\0.*$/g, '').split(' ');
             return `Order number = ${orderNumber}, type = ${protocolFamily || 'Non-EKC'}`;
           }
         }
@@ -315,6 +315,7 @@ function parseData(frame: MyModbusFrame, previousFrame: null | MyModbusFrame) {
 
   if (frame.mbFunction && frame.mbFunction >= EXCEPTION_CODE) {
     const exceptionCode: number = frame.data.readInt8(0);
+    console.log(`Exception code: ${exceptionCode}`);
     if (exceptionCode in EXCEPTION_CODES) {
       return EXCEPTION_CODES[exceptionCode];
     }
@@ -435,7 +436,7 @@ async function modbusRequest(client: ModbusRTU, unitId: number, timeout: number,
           addr = parseInt(mbOptions.addr);
           const values: boolean[] = mbOptions.values.map((i: number) => i === 1);
           result = await client.writeCoils(addr + REGISTER_OFFSET, values);
-          
+
 
           if (result.length !== values.length) {
             console.log('Write coils result did not match request length!');
@@ -478,8 +479,10 @@ async function modbusRequest(client: ModbusRTU, unitId: number, timeout: number,
         console.log('Unknown modbus function!');
         errorCode = 998;
         errorText = 'Modbus function not implemented yet';
-    }   
+    }
   } catch (err: any) {
+    console.log('EXCEPTION!!');
+    console.log(err);
     errorCode = err.modbusCode;
     errorText = err.message;
     if (err.name === 'TransactionTimedOutError') {
@@ -866,6 +869,7 @@ export class ModbusScannerTCP extends ModbusScanner {
               scanItem.state = ScanState.Online;
               scanItem.stateText = this.stateList[ScanState.Online];
               scanItem.errorMessage = `Unit ID: ${id}. ${error.message} `;
+              this.foundUnits++;
               return true;
             } else {
               this.log('info', `${timeSince(start)}: Unit is not responding(${error.message})`);
@@ -1051,7 +1055,7 @@ export class ModbusScannerRTU extends ModbusScanner {
       } catch (error) {
         console.log(error);
         this.log('info', `Unable to open ${port} `);
-        throw(error);
+        throw (error);
       }
     };
 
@@ -1078,7 +1082,7 @@ export class ModbusAnalyzer extends EventEmitter {
       this.serialPort = new SerialPort({ path: port, baudRate, parity, dataBits, stopBits, autoOpen: false });
       console.log('Attaching to parser');
       const parser = this.serialPort.pipe(new InterByteTimeoutParser({ interval: 15 }));
-    
+
       let previousFrame: MyModbusFrame | null = null;
 
       parser.on('data', (data) => {
@@ -1106,19 +1110,19 @@ export class ModbusAnalyzer extends EventEmitter {
           }
 
           this.emit('log', {
-              timestamp: formatTimestamp(timestamp),
-              crc: modbusFrame.crc,
-              address: modbusFrame.address,
-              mbFunction: modbusFrame.mbFunction,
-              type: modbusFrame.type,
-              data,
-              buffer: formatByteArray(modbusFrame.buffer),
+            timestamp: formatTimestamp(timestamp),
+            crc: modbusFrame.crc,
+            address: modbusFrame.address,
+            mbFunction: modbusFrame.mbFunction,
+            type: modbusFrame.type,
+            data,
+            buffer: formatByteArray(modbusFrame.buffer),
           });
 
           previousFrame = modbusFrame;
         });
-      }); 
-      
+      });
+
       this.serialPort.open((error) => {
         if (error) {
           console.log(error);

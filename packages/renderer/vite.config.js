@@ -7,9 +7,9 @@ import Icons from 'unplugin-icons/vite';
 import IconsResolver from 'unplugin-icons/resolver';
 import AutoImport from 'unplugin-auto-import/vite';
 import Components from 'unplugin-vue-components/vite';
-import { ElementPlusResolver } from 'unplugin-vue-components/resolvers';
+import {ElementPlusResolver} from 'unplugin-vue-components/resolvers';
 import {renderer} from 'unplugin-auto-expose';
-import path, { join } from 'node:path';
+import path, {join} from 'node:path';
 import {injectAppVersion} from '../../version/inject-app-version-plugin.mjs';
 
 const PACKAGE_ROOT = __dirname;

@@ -1,6 +1,5 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <script lang="ts" setup>
-
 const APP_VERSION = import.meta.env.VITE_APP_VERSION;
 </script>
 
@@ -23,4 +22,4 @@ const APP_VERSION = import.meta.env.VITE_APP_VERSION;
       </el-card>
     </el-col>
   </el-row>
-</template> 
+</template>

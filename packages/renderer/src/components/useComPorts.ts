@@ -1,4 +1,4 @@
-import { serial } from '#preload';
+import {serial} from '#preload';
 
 function sortComPort(a: ComPort, b: ComPort) {
   const portA = parseInt(a.path.split('COM')[1]);
@@ -8,12 +8,12 @@ function sortComPort(a: ComPort, b: ComPort) {
   return 0;
 }
 
-export default async function useComPorts(){
-  const comPorts: Ref<ComPort[]> = ref([]);
+export default async function useComPorts() {
+  let comPorts: ComPort[] = [];
 
-  comPorts.value = await serial.getComPorts();
-  comPorts.value = comPorts.value.sort(sortComPort);
-  console.log(comPorts.value);
+  comPorts = await serial.getComPorts();
+  comPorts = comPorts.sort(sortComPort);
+  console.log(comPorts);
 
   return {
     comPorts,

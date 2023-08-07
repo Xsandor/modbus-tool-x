@@ -15,7 +15,7 @@ interface NetworkInfo {
 interface ScanLogItem {
   type: string, message: string
 }
-  
+
 interface ComPort {
   path: string,
   manufacturer: string
@@ -30,7 +30,7 @@ interface LogStats {
   progress: number;
 }
 
-interface LoggerLogMessage  {
+interface LoggerLogMessage {
   stats: LogStats
   request: GenericObject
 }
@@ -39,7 +39,7 @@ interface ModbusTask {
   unitId: number
   mbFunction: number
   mbOptions: {
-      [x: string]: any
+    [x: string]: any
   }
 }
 
@@ -100,16 +100,16 @@ interface ModbusRtuServerConfiguration extends SerialPortConfiguration {
   unitId: number
 }
 
-interface RtuRequestConfiguration extends ModbusRequestConfiguration, SerialPortConfiguration {}
+interface RtuRequestConfiguration extends ModbusRequestConfiguration, SerialPortConfiguration { }
 
-interface SingleModbusRtuRequestConfiguration extends RtuRequestConfiguration, SingleModbusRequestConfiguration {}
+interface SingleModbusRtuRequestConfiguration extends RtuRequestConfiguration, SingleModbusRequestConfiguration { }
 
 interface TcpRequestConfiguration extends ModbusRequestConfiguration {
   ip: string
   port: number
 }
 
-interface SingleModbusTcpRequestConfiguration extends TcpRequestConfiguration, SingleModbusRequestConfiguration {}
+interface SingleModbusTcpRequestConfiguration extends TcpRequestConfiguration, SingleModbusRequestConfiguration { }
 
 interface LoggerConfiguration {
   count: number
@@ -117,9 +117,9 @@ interface LoggerConfiguration {
   tasks: ModbusTask[]
 }
 
-interface TcpLoggerConfiguration extends LoggerConfiguration, TcpRequestConfiguration {}
+interface TcpLoggerConfiguration extends LoggerConfiguration, TcpRequestConfiguration { }
 
-interface RtuLoggerConfiguration extends LoggerConfiguration, RtuRequestConfiguration {}
+interface RtuLoggerConfiguration extends LoggerConfiguration, RtuRequestConfiguration { }
 
 type IP = string
 type TcpPort = number
@@ -141,7 +141,7 @@ interface ModbusRtuScanConfiguration extends RtuRequestConfiguration {
 }
 
 interface ScanItem {
-  state: number
+  state: SCAN_ITEM_STATE
   stateText: string
   errorMessage: string
   id: string | number

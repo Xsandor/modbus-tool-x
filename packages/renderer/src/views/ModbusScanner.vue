@@ -15,19 +15,19 @@
           label-width="120px"
         >
           <el-form-item label="Connection Type">
-            <el-radio-group v-model="connectionType">
+            <el-radio-group v-model="modbusStore.scannerConfiguration.connectionType">
               <el-radio-button label="0">Modbus RTU</el-radio-button>
               <el-radio-button label="1">Modbus TCP</el-radio-button>
             </el-radio-group>
           </el-form-item>
-          <template v-if="connectionType == CONNECTION_TYPE.RTU">
+          <template v-if="modbusStore.scannerConfiguration.connectionType == CONNECTION_TYPE.RTU">
             <el-form-item label="COM port">
               <el-select
-                v-model="rtuConfiguration.port"
+                v-model="modbusStore.scannerConfiguration.rtu.port"
                 placeholder="Select port"
               >
                 <el-option
-                  v-for="item in comPorts"
+                  v-for="item in modbusStore.comPorts"
                   :key="item.path"
                   :label="item.path"
                   :value="item.path"
@@ -36,11 +36,11 @@
             </el-form-item>
             <el-form-item label="Baud rate">
               <el-select
-                v-model.number="rtuConfiguration.baudRate"
+                v-model.number="modbusStore.scannerConfiguration.rtu.baudRate"
                 placeholder="Select baudRate"
               >
                 <el-option
-                  v-for="item in baudRateOptions"
+                  v-for="item in modbusStore.baudRateOptions"
                   :key="item.value"
                   :label="item.label"
                   :value="item.value"
@@ -49,11 +49,11 @@
             </el-form-item>
             <el-form-item label="Parity">
               <el-select
-                v-model="rtuConfiguration.parity"
+                v-model="modbusStore.scannerConfiguration.rtu.parity"
                 placeholder="Select parity"
               >
                 <el-option
-                  v-for="item in parityOptions"
+                  v-for="item in modbusStore.parityOptions"
                   :key="item.value"
                   :label="item.label"
                   :value="item.value"
@@ -62,7 +62,7 @@
             </el-form-item>
             <el-form-item label="Data bits">
               <el-input
-                v-model.number="rtuConfiguration.dataBits"
+                v-model.number="modbusStore.scannerConfiguration.rtu.dataBits"
                 type="number"
                 min="6"
                 max="8"
@@ -70,7 +70,7 @@
             </el-form-item>
             <el-form-item label="Stop bits">
               <el-input
-                v-model.number="rtuConfiguration.stopBits"
+                v-model.number="modbusStore.scannerConfiguration.rtu.stopBits"
                 type="number"
                 min="1"
                 max="2"
@@ -78,7 +78,7 @@
             </el-form-item>
             <el-form-item label="Timeout">
               <el-input
-                v-model.number="rtuConfiguration.timeout"
+                v-model.number="modbusStore.scannerConfiguration.rtu.timeout"
                 type="number"
                 min="1"
                 max="10000"
@@ -90,19 +90,19 @@
           <template v-else>
             <el-form-item label="Start IP Address">
               <el-input
-                v-model="scanConfiguration.startIp"
+                v-model="modbusStore.scannerConfiguration.tcp.startIp"
                 type="text"
               />
             </el-form-item>
             <el-form-item label="End IP Address">
               <el-input
-                v-model="scanConfiguration.endIp"
+                v-model="modbusStore.scannerConfiguration.tcp.endIp"
                 type="text"
               />
             </el-form-item>
             <el-form-item label="Port">
               <el-input
-                v-model.number="tcpConfiguration.port"
+                v-model.number="modbusStore.scannerConfiguration.tcp.port"
                 type="number"
                 min="1"
                 max="65535"
@@ -110,7 +110,7 @@
             </el-form-item>
             <el-form-item label="Timeout">
               <el-input
-                v-model.number="tcpConfiguration.timeout"
+                v-model.number="modbusStore.scannerConfiguration.tcp.timeout"
                 type="number"
                 min="1"
                 max="10000"
@@ -121,7 +121,7 @@
           </template>
           <el-form-item label="Delay">
             <el-input
-              v-model.number="requestDelay"
+              v-model.number="modbusStore.scannerConfiguration.rtu.requestDelay"
               type="number"
               min="1"
               max="9999"
@@ -131,7 +131,7 @@
           </el-form-item>
           <el-form-item label="Min. Unit ID">
             <el-input
-              v-model.number="commonConfiguration.minUnitId"
+              v-model.number="modbusStore.scannerConfiguration.common.minUnitId"
               type="number"
               min="1"
               max="254"
@@ -139,7 +139,7 @@
           </el-form-item>
           <el-form-item label="Max. Unit ID">
             <el-input
-              v-model.number="commonConfiguration.maxUnitId"
+              v-model.number="modbusStore.scannerConfiguration.common.maxUnitId"
               type="number"
               min="1"
               max="254"
@@ -167,7 +167,7 @@
       <el-space
         direction="vertical"
         :fill="true"
-        style="width:100%"
+        style="width: 100%"
       >
         <el-card>
           <template #header>
@@ -188,32 +188,47 @@
             title="Error"
             :sub-title="scannerError"
           ></el-result>
-          <el-row
-            v-if="scanList.length"
-            :gutter="20"
-          >
-            <el-col
-              v-for="item in scanList"
-              :key="item.id"
-              :span="6"
-              style="padding: 5px;"
-            >
-              <div
-                :class="getStatusClass(item.state)"
-                class="status-item"
+          <el-collapse v-model="openSections">
+            <el-collapse-item name="1">
+              <template #title
+                >Online nodes
+                <el-tag
+                  class="ml-1"
+                  size="small"
+                  type="success"
+                  effect="dark"
+                  >{{ onlineItems.length }}</el-tag
+                ></template
               >
-                <h4 style="margin-top: 5px; margin-bottom: 3px;">{{ item.id }}</h4>
-                <span
-                  style="font-size: 0.8em;"
-                  :title="item.errorMessage"
-                >{{ item.stateText }}</span>
-              </div>
-            </el-col>
-          </el-row>
-          <el-empty
-            v-else
-            description="Nothing to see here yet"
-          />
+              <GridList :list="onlineItems" />
+            </el-collapse-item>
+            <el-collapse-item name="2">
+              <template #title
+                >Offline nodes
+                <el-tag
+                  class="ml-1"
+                  size="small"
+                  type="danger"
+                  effect="dark"
+                  >{{ offlineItems.length }}</el-tag
+                ></template
+              >
+              <GridList :list="offlineItems" />
+            </el-collapse-item>
+            <el-collapse-item name="3">
+              <template #title
+                >Waiting
+                <el-tag
+                  class="ml-1"
+                  size="small"
+                  type="info"
+                  effect="dark"
+                  >{{ unknownItems.length }}</el-tag
+                ></template
+              >
+              <GridList :list="unknownItems" />
+            </el-collapse-item>
+          </el-collapse>
         </el-card>
         <el-card header="Log">
           <div class="log-container">
@@ -221,7 +236,8 @@
               v-for="(logRow, index) in resultLog"
               :key="'result-' + index"
               :class="logRow.type"
-            >{{ logRow.message }}</span>
+              >{{ logRow.message }}</span
+            >
           </div>
         </el-card>
       </el-space>
@@ -231,34 +247,44 @@
 
 <!-- eslint-disable no-undef -->
 <script lang="ts" setup>
-import { csv, scanner } from '#preload';
-import useModbus from '/@/components/useModbus';
-import useComPorts from '/@/components/useComPorts';
-import { networkInfoKey } from '/@/helpers/injectionKeys';
+import {csv, scanner} from '#preload';
+import {CONNECTION_TYPE, useModbusStore} from '/@/components/useModbus';
 import * as Papa from 'papaparse';
 
-const { comPorts } = await useComPorts();
-const { parityOptions, baudRateOptions, connectionType, tcpConfiguration, rtuConfiguration, CONNECTION_TYPE } = useModbus();
-
-const networkInfo = inject(networkInfoKey);
-
-const commonConfiguration = ref({
-  minUnitId: 1,
-  maxUnitId: 247,
-});
-
-const scanConfiguration = ref({
-  startIp: '',
-  endIp: '',
-});
-
-const requestDelay = ref(50);
+const modbusStore = useModbusStore();
 
 const resultLog: Ref<ScanLogItem[]> = ref([]);
 const scanning = ref(false);
 const scanList: Ref<ScanItem[]> = ref([]);
+
+const enum ScanItemState {
+  Waiting = 0,
+  Scanning = 1,
+  Online = 2,
+  Offline = 3,
+  OnlineNoResponse = 4,
+}
+
+const onlineItems = computed(() => {
+  return scanList.value.filter(
+    item => item.state === ScanItemState.Online || item.state === ScanItemState.OnlineNoResponse,
+  );
+});
+
+const offlineItems = computed(() => {
+  return scanList.value.filter(item => item.state === ScanItemState.Offline);
+});
+
+const unknownItems = computed(() => {
+  return scanList.value.filter(
+    item => item.state === ScanItemState.Scanning || item.state === ScanItemState.Waiting,
+  );
+});
+
 const scanProgress = ref(0);
 const foundUnits = ref(-1);
+
+const openSections = ref(['1']);
 
 const scannerError: Ref<string> = ref('');
 
@@ -266,8 +292,17 @@ function exportLog() {
   console.log('Trying to save file');
   const text = Papa.unparse(scanList.value);
 
-  if (connectionType.value == CONNECTION_TYPE.RTU) {
-    csv.save(text, `Modbus Scanner RTU ${rtuConfiguration.value.port} ${rtuConfiguration.value.baudRate} ${rtuConfiguration.value.dataBits}${rtuConfiguration.value.parity[0].toUpperCase()}${rtuConfiguration.value.stopBits}`);
+  if (modbusStore.scannerConfiguration.connectionType == CONNECTION_TYPE.RTU) {
+    csv.save(
+      text,
+      `Modbus Scanner RTU ${modbusStore.scannerConfiguration.rtu.port} ${
+        modbusStore.scannerConfiguration.rtu.baudRate
+      } ${
+        modbusStore.scannerConfiguration.rtu.dataBits
+      }${modbusStore.scannerConfiguration.rtu.parity[0].toUpperCase()}${
+        modbusStore.scannerConfiguration.rtu.stopBits
+      }`,
+    );
   } else {
     csv.save(text, 'Modbus Scanner TCP');
   }
@@ -287,33 +322,21 @@ const scanState = computed(() => {
     }
     return 'Idle';
   }
-  return `Scanning: ${scanProgress.value.toFixed(0)} % (found ${foundUnits.value} ${foundUnits.value === 1 ? 'unit' : 'units'})`;
+  return `Scanning: ${scanProgress.value.toFixed(0)} % (found ${foundUnits.value} ${
+    foundUnits.value === 1 ? 'unit' : 'units'
+  })`;
 });
 
-onMounted(async () => {
-  console.log('Component is mounted, getting com ports');
-  if (networkInfo) {
-    scanConfiguration.value.startIp = networkInfo.value.firstIpOnSubnet;
-    scanConfiguration.value.endIp = networkInfo.value.lastIpOnSubnet;
-    rtuConfiguration.value.port = comPorts.value[0].path;
-
-    watch(networkInfo, () => {
-      scanConfiguration.value.startIp = networkInfo.value.firstIpOnSubnet;
-      scanConfiguration.value.endIp = networkInfo.value.lastIpOnSubnet;
-    });
-  }
-});
-
-function appendToLog(logRow: ScanLogItem) {
-  resultLog.value.unshift(logRow);
+function appendToLog(logRows: ScanLogItem[]) {
+  resultLog.value = logRows.reverse().concat(resultLog.value);
 }
 
 scanner.onStatus((_event, updatedScanList) => {
   scanList.value = updatedScanList;
 });
 
-scanner.onLog((_event, message) => {
-  appendToLog(message);
+scanner.onLog((_event, messages) => {
+  appendToLog(messages);
 });
 
 scanner.onProgress((_event, [progress, found]) => {
@@ -327,51 +350,46 @@ scanner.onProgress((_event, [progress, found]) => {
 
 const startScan = async () => {
   clearScanList();
-  appendToLog({ type: 'info', message: 'Starting scanner' });
+  appendToLog([{type: 'info', message: 'Starting scanner'}]);
 
-  if (connectionType.value == CONNECTION_TYPE.RTU) {
+  if (modbusStore.scannerConfiguration.connectionType == CONNECTION_TYPE.RTU) {
     const config = {
-      ...rtuConfiguration.value,
-      ...commonConfiguration.value,
-      delay: requestDelay.value,
+      ...modbusStore.scannerConfiguration.rtu,
+      minUnitId: modbusStore.scannerConfiguration.common.minUnitId,
+      maxUnitId: modbusStore.scannerConfiguration.common.maxUnitId,
+      delay: modbusStore.scannerConfiguration.rtu.requestDelay,
     };
 
-    const {error } = await scanner.startRtuScan(config);
+    const {error} = await scanner.startRtuScan(config);
     if (error) {
       scannerError.value = error;
     } else {
+      console.log('Scanning started');
       scanning.value = true;
     }
-
   } else {
     const config = {
-      ...tcpConfiguration.value,
-      ...commonConfiguration.value,
-      startIp: scanConfiguration.value.startIp,
-      endIp: scanConfiguration.value.endIp,
+      ...modbusStore.scannerConfiguration.tcp,
+      minUnitId: modbusStore.scannerConfiguration.common.minUnitId,
+      maxUnitId: modbusStore.scannerConfiguration.common.maxUnitId,
     };
 
-    const {error } = await scanner.startTcpScan(config);
+    const {error} = await scanner.startTcpScan(config);
     if (error) {
       scannerError.value = error;
     } else {
+      console.log('Scanning started');
       scanning.value = true;
     }
   }
 };
 
-const statusClasses = [
-  'state-waiting', //'Waiting',
-  'state-scanning',//'Scanning',
-  'state-online',//'Online',
-  'state-offline',//'Server offline',
-  'state-warning',//'Server online but no response
-];
-
-function getStatusClass(state: number) {
-  return statusClasses[state];
-}
-
+onMounted(() => {
+  if (!modbusStore.scannerConfiguration.tcp.startIp) {
+    modbusStore.scannerConfiguration.tcp.startIp = modbusStore.networkInfo?.firstIpOnSubnet;
+    modbusStore.scannerConfiguration.tcp.endIp = modbusStore.networkInfo?.lastIpOnSubnet;
+  }
+});
 </script>
 
 <style scoped lang="scss">
@@ -392,32 +410,6 @@ function getStatusClass(state: number) {
     &.success {
       color: green;
     }
-  }
-}
-
-.status-item {
-  border-radius: 5px;
-  padding: 1px 10px 5px 10px;
-  color: #fff;
-
-  &.state-waiting {
-    background-color: rgb(124, 124, 124);
-  }
-
-  &.state-scanning {
-    background-color: rgb(55, 147, 163);
-  }
-
-  &.state-online {
-    background-color: rgb(45, 163, 45);
-  }
-
-  &.state-offline {
-    background-color: rgb(160, 108, 108);
-  }
-
-  &.state-warning {
-    background-color: rgb(180, 114, 38);
   }
 }
 </style>

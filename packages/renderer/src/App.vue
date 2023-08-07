@@ -1,21 +1,22 @@
 <script lang="ts" setup>
-  import { network } from '#preload';
-  import logo from '../assets/Modbus Tool X.svg';
-  import { networkInfoKey } from '/@/helpers/injectionKeys';
+import {network} from '#preload';
+import logo from '../assets/Modbus Tool X.svg';
+import {useModbusStore} from './components/useModbus';
 
-  // eslint-disable-next-line no-undef
-  const networkInfo = ref();
+// eslint-disable-next-line no-undef
 
-  // eslint-disable-next-line no-undef
-  provide(networkInfoKey, networkInfo);
+const loading = ref(true);
 
-  network.onInfo((_event, netInfo) => {
-    console.log('Got network info!');
-    console.log(netInfo);
-    networkInfo.value = netInfo;
-  });
+const modbusStore = useModbusStore();
 
-  network.getInfo();
+network.onInfo((_event, netInfo) => {
+  console.log('Got network info!');
+  console.log(netInfo);
+  modbusStore.networkInfo = netInfo;
+  loading.value = false;
+});
+
+network.getInfo();
 </script>
 
 <template>
@@ -33,7 +34,7 @@
           <el-menu
             class="el-menu-vertical-demo"
             :router="true"
-            :default-active="$route.path || '/'"
+            :default-active="$route.path"
           >
             <el-menu-item index="/">
               <el-icon>
@@ -41,10 +42,7 @@
               </el-icon>
               <span>Modbus Client</span>
             </el-menu-item>
-            <el-menu-item
-              index="/server"
-              :disabled="true"
-            >
+            <el-menu-item index="/server">
               <el-icon>
                 <i-ep-cpu />
               </el-icon>
@@ -81,7 +79,14 @@
         <el-main>
           <el-scrollbar>
             <Suspense>
-              <router-view></router-view>
+              <router-view
+                v-if="!loading"
+                v-slot="{Component}"
+              >
+                <keep-alive>
+                  <component :is="Component" />
+                </keep-alive>
+              </router-view>
             </Suspense>
           </el-scrollbar>
         </el-main>
@@ -93,7 +98,20 @@
 
 <style lang="scss">
 * {
-  font-family: "Helvetica Neue", Helvetica;
+  font-family: 'Helvetica Neue', Helvetica;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+.ml-1 {
+  margin-left: 5px;
+}
+
+.ml-2 {
+  margin-left: 10px;
 }
 
 .el-header {
@@ -109,7 +127,8 @@
 
 .el-aside {
   /* background-color: #eee; */
-  padding-top: 20px;
+  padding: 10px 10px 20px 10px;
+  margin-top: 10px;
   /* var(--el-main-padding) */
 
   .el-menu {
@@ -123,11 +142,14 @@
 
 .el-main {
   max-height: calc(100vh - 60px - 20px - 8px);
-  padding: 0px;
+  padding: 0;
 
   > .el-scrollbar {
     box-sizing: border-box;
-    padding: 20px;
+  }
+
+  .el-scrollbar__view {
+    padding: 20px 10px 20px 10px;
   }
 }
 

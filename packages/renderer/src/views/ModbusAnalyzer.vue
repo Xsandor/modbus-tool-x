@@ -1,55 +1,54 @@
 <script lang="ts" setup>
-  import { analyzer, csv } from '#preload';
-  import useModbus from '/@/components/useModbus';
-  import useComPorts from '/@/components/useComPorts';
-  import * as Papa from 'papaparse';
+import {analyzer, csv} from '#preload';
+import * as Papa from 'papaparse';
+import {MODBUS_FUNCTIONS, useModbusStore} from '/@/components/useModbus';
 
-  const { comPorts } = await useComPorts();
-  const { formatFunctionCode, parityOptions, baudRateOptions, rtuConfiguration, MODBUS_FUNCTIONS } = useModbus();
+const modbusStore = useModbusStore();
 
-  const dataRows: Ref<GenericObject[]> = ref([]);
+const dataRows: Ref<GenericObject[]> = ref([]);
 
-  const starting: Ref<boolean> = ref(false);
-  const started: Ref<boolean> = ref(false);
+const starting: Ref<boolean> = ref(false);
+const started: Ref<boolean> = ref(false);
 
-  const showColumns: Ref<GenericObject> = ref({
-    timestamp: true,
-    crc: true,
-    type: true,
-    address: true,
-    mbFunction: true,
-    data: true,
-    buffer: false,
+const showColumns: Ref<GenericObject> = ref({
+  timestamp: true,
+  crc: true,
+  type: true,
+  address: true,
+  mbFunction: true,
+  data: true,
+  buffer: false,
+});
+
+analyzer.onLog((_event, logs: GenericObject[]) => {
+  logs.forEach((data: GenericObject) => {
+    dataRows.value.unshift(data);
   });
+});
 
-  analyzer.onLog((_event, logs: GenericObject[]) => {
-    logs.forEach((data: GenericObject) => {
-      dataRows.value.unshift(data);
-    });
-  });
+const filteredLog = computed(() => {
+  let rows = [];
 
-  const filteredLog = computed(() => {
-    let rows = [];
+  if (filter.value.mbFunction) {
+    const filteredMbFunction = filter.value.mbFunction;
+    rows = dataRows.value.filter(i => i.mbFunction === filteredMbFunction);
+  } else {
+    rows = dataRows.value;
+  }
 
-    if (filter.value.mbFunction) {
-      const filteredMbFunction = filter.value.mbFunction;
-      rows = dataRows.value.filter(i => i.mbFunction === filteredMbFunction);
-    } else {
-      rows = dataRows.value;
-    }
+  console.log(rows.length);
 
-    console.log(rows.length);
+  if (rows.length > 200) {
+    return rows.slice(0, 200);
+  }
 
-    if (rows.length > 200) {
-      return rows.slice(0, 200);
-    }
+  return rows;
+});
 
-    return rows;
-  });
-
-  function exportLog() {
-    console.log('Trying to save file');
-    const text = Papa.unparse(dataRows.value.map(i => {
+function exportLog() {
+  console.log('Trying to save file');
+  const text = Papa.unparse(
+    dataRows.value.map(i => {
       let type = 'unknown';
       if (i.type === 1) {
         type = 'request';
@@ -61,86 +60,83 @@
         ...i,
         type,
       };
-    }));
+    }),
+  );
 
-    csv.save(text, 'Modbus Analyzer');
+  csv.save(text, 'Modbus Analyzer');
+}
+
+const allModbusFunctions: {
+  id: number;
+  name: string;
+}[] = Object.keys(MODBUS_FUNCTIONS).map(key => {
+  return {id: parseInt(key), name: MODBUS_FUNCTIONS[key]};
+});
+
+const modbusFunctionOptions = [{id: 0, name: 'Show all'}].concat(allModbusFunctions);
+
+const analyzerError: Ref<string> = ref('');
+
+const filter = ref({
+  mbFunction: 0,
+});
+
+// function formatFrameType(type: number) {
+//   if (type === 1) return 'Request';
+//   if (type === 2) return 'Response';
+
+//   return 'Unknown';
+// }
+
+const dataRowClassName = ({row, _rowIndex}: GenericObject) => {
+  if (row.type === 1) {
+    return 'warning-row';
+  } else if (row.type === 2) {
+    return 'success-row';
   }
+  return '';
+};
 
-  const allModbusFunctions: {
-    id: number
-    name: string
-  }[] = Object.keys(MODBUS_FUNCTIONS)
-    .map((key) => {
-      return { id: parseInt(key), name: MODBUS_FUNCTIONS[key]};
-    });
+function clearLog() {
+  analyzerError.value = '';
+  dataRows.value = [];
+}
 
-  const modbusFunctionOptions = [{ id: 0, name: 'Show all' }].concat(allModbusFunctions);
+async function startAnalyzer() {
+  starting.value = true;
+  analyzerError.value = '';
 
-  const analyzerError: Ref<string> = ref('');
-
-  const filter = ref({
-    mbFunction: 0,
-  });
-
-  // function formatFrameType(type: number) {
-  //   if (type === 1) return 'Request';
-  //   if (type === 2) return 'Response';
-
-  //   return 'Unknown';
-  // }
-
-  const dataRowClassName = ({
-    row,
-    _rowIndex,
-  }: GenericObject) => {
-    if (row.type === 1) {
-      return 'warning-row';
-    } else if (row.type === 2) {
-      return 'success-row';
-    }
-    return '';
+  const config: SerialPortConfiguration = {
+    ...modbusStore.analyzerConfiguration.rtu,
   };
 
-  function clearLog() {
-    analyzerError.value = '';
-    dataRows.value = [];
+  // console.log(config)
+  console.log('Sending start request');
+  const {_result, error} = await analyzer.startRtu(config);
+  console.log('Got response!');
+  if (error) {
+    analyzerError.value = error;
+  } else {
+    started.value = true;
   }
+  starting.value = false;
+}
 
-  async function startAnalyzer() {
-    starting.value = true;
-    analyzerError.value = '';
-
-    const config: SerialPortConfiguration = {
-      ...rtuConfiguration.value,
-    };
-
-    // console.log(config)
-    console.log('Sending start request');
-    const { _result, error } = await analyzer.startRtu(config);
-    console.log('Got response!');
-    if (error) {
-      analyzerError.value = error;
-    } else {
-      started.value = true;
-    }
+async function stopAnalyzer() {
+  if (started.value) {
+    await analyzer.stopRtu();
+    started.value = false;
     starting.value = false;
   }
+}
 
-  async function stopAnalyzer() {
-    if (started.value) {
-      await analyzer.stopRtu();
-      started.value = false;
-      starting.value = false;
-    }
-  }
+onMounted(async () => {
+  // rtuConfiguration.value.port = "COM10"
+});
 
-  onMounted(async () => {
-    // rtuConfiguration.value.port = "COM10"
-  });
-
-  onBeforeUnmount(() => {
-    stopAnalyzer();
-  });
+onBeforeUnmount(() => {
+  stopAnalyzer();
+});
 </script>
 
 <template>
@@ -161,11 +157,11 @@
         >
           <ElFormItem label="COM port">
             <ElSelect
-              v-model="rtuConfiguration.port"
+              v-model="modbusStore.analyzerConfiguration.rtu.port"
               placeholder="Select port"
             >
               <ElOption
-                v-for="item in comPorts"
+                v-for="item in modbusStore.comPorts"
                 :key="item.path"
                 :label="item.path"
                 :value="item.path"
@@ -174,11 +170,11 @@
           </ElFormItem>
           <ElFormItem label="Baud rate">
             <ElSelect
-              v-model.number="rtuConfiguration.baudRate"
+              v-model.number="modbusStore.analyzerConfiguration.rtu.baudRate"
               placeholder="Select baudRate"
             >
               <ElOption
-                v-for="item in baudRateOptions"
+                v-for="item in modbusStore.baudRateOptions"
                 :key="item.value"
                 :label="item.label"
                 :value="item.value"
@@ -187,11 +183,11 @@
           </ElFormItem>
           <ElFormItem label="Parity">
             <ElSelect
-              v-model="rtuConfiguration.parity"
+              v-model="modbusStore.analyzerConfiguration.rtu.parity"
               placeholder="Select parity"
             >
               <ElOption
-                v-for="item in parityOptions"
+                v-for="item in modbusStore.parityOptions"
                 :key="item.value"
                 :label="item.label"
                 :value="item.value"
@@ -200,14 +196,14 @@
           </ElFormItem>
           <ElFormItem label="Data bits">
             <ElInputNumber
-              v-model.number="rtuConfiguration.dataBits"
+              v-model.number="modbusStore.analyzerConfiguration.rtu.dataBits"
               :min="6"
               :max="8"
             />
           </ElFormItem>
           <ElFormItem label="Stop bits">
             <ElInputNumber
-              v-model.number="rtuConfiguration.stopBits"
+              v-model.number="modbusStore.analyzerConfiguration.rtu.stopBits"
               :min="1"
               :max="2"
             />
@@ -311,7 +307,7 @@
                     color="red"
                   ></el-icon-circle-close>
                 </el-icon>
-              </template>   
+              </template>
             </ElTableColumn>
             <ElTableColumn
               prop="type"
@@ -330,8 +326,8 @@
                     color="green"
                   ></el-icon-arrow-left-bold>
                 </el-icon>
-              </template>
-            </ElTableColumn>>
+              </template> </ElTableColumn
+            >>
             <ElTableColumn
               prop="address"
               label="Address"
@@ -343,7 +339,7 @@
               width="200"
             >
               <template #default="scope">
-                {{ formatFunctionCode(scope.row.mbFunction) }}
+                {{ modbusStore.formatFunctionCode(scope.row.mbFunction) }}
               </template>
             </ElTableColumn>
             <ElTableColumn
@@ -360,7 +356,7 @@
       </el-card>
     </el-col>
   </el-row>
-</template> 
+</template>
 
 <style>
 .el-table .warning-row {

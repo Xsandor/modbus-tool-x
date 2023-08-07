@@ -5,6 +5,9 @@ import { ModbusLoggerTCP, ModbusLoggerRTU, modbusTcpRequest, modbusRtuRequest, M
 import { getNetworkInfo } from './networkUtils';
 import { writeFile } from 'node:fs';
 import { ModbusServer } from './modbusServer';
+import Store from 'electron-store';
+
+const store = new Store();
 
 async function createWindow() {
   const browserWindow = new BrowserWindow({
@@ -58,6 +61,15 @@ async function createWindow() {
     await browserWindow.loadFile(resolve(__dirname, '../../renderer/dist/index.html'));
   }
 
+  // IPC listener
+  ipcMain.on('electron-store-get', async (event, val) => {
+    event.returnValue = store.get(val);
+  });
+
+  ipcMain.on('electron-store-set', async (_event, key, val) => {
+    store.set(key, val);
+  });
+
   ipcMain.handle('saveCSV', async (_event, data, source: null | string) => {
     console.log('Will save file!');
     // console.log(data)
@@ -96,7 +108,7 @@ async function createWindow() {
       browserWindow.webContents.send('logger:log', logs);
       logs = [];
     }, 250);
-  
+
     logger.on('log', (log) => {
       logs.push(log);
       sendLogsToWeb();
@@ -115,24 +127,24 @@ async function createWindow() {
       };
     }
   });
-  
+
   ipcMain.handle('startRtuLogger', async (_event, configuration) => {
     // console.log('Start TCP Scan');
     // console.log(options)
     logger = new ModbusLoggerRTU();
-  
+
     let logs: GenericObject[] = [];
-  
+
     const sendLogsToWeb = throttle(() => {
       browserWindow.webContents.send('logger:log', logs);
       logs = [];
     }, 250);
-  
+
     logger.on('log', (log) => {
       logs.push(log);
       sendLogsToWeb();
     });
-  
+
     try {
       await logger.request(configuration);
       return {
@@ -166,13 +178,13 @@ async function createWindow() {
       };
     }
   });
-  
+
   ipcMain.handle('performRtuRequest', async (_event, configuration) => {
     // console.log('Modbus RTU request')
     // console.log(configuration)
     try {
       return modbusRtuRequest(configuration);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       return {
         errorCode: 997,
@@ -183,30 +195,48 @@ async function createWindow() {
     }
   });
 
+  let scanner: ModbusScannerTCP | ModbusScannerRTU | null = null;
+
   ipcMain.handle('startTcpScan', async (_event, options) => {
     console.log('Start TCP Scan');
     console.log(options);
-    const scanner = new ModbusScannerTCP();
-  
+    scanner = new ModbusScannerTCP();
+
+    let logs: GenericObject[] = [];
+
+    const sendLogsToWeb = throttle(() => {
+      browserWindow.webContents.send('scanner:log', logs);
+      logs = [];
+    }, 250);
+
     scanner.on('log', (log) => {
-      browserWindow.webContents.send('scanner:log', log);
+      logs.push(log);
+      sendLogsToWeb();
     });
-  
+
+    const sendStatusToWeb = throttle((statusList: GenericObject[]) => {
+      browserWindow.webContents.send('scanner:status', statusList);
+    }, 250);
+
     scanner.on('status', (statusList) => {
       // console.log('Sending status update:')
       // console.log(statusList)
-      browserWindow.webContents.send('scanner:status', statusList);
+      sendStatusToWeb(statusList);
     });
-  
+
+    const sendProgressToWeb = throttle((progress: number) => {
+      browserWindow.webContents.send('scanner:progress', progress);
+    }, 250);
+
     scanner.on('progress', (progress) => {
       // console.log('Sending progress update')
       // console.log(progress)
-      browserWindow.webContents.send('scanner:progress', progress);
+      sendProgressToWeb(progress);
     });
-  
-    
+
+
     try {
-      await scanner.scan(options);
+      scanner.scan(options);
       return {
         result: 'started',
         error: null,
@@ -218,30 +248,46 @@ async function createWindow() {
       };
     }
   });
-  
+
   ipcMain.handle('startRtuScan', async (_event, options) => {
     console.log('Start RTU Scan');
     console.log(options);
-    const scanner = new ModbusScannerRTU();
-  
+    scanner = new ModbusScannerRTU();
+
+    let logs: GenericObject[] = [];
+
+    const sendLogsToWeb = throttle(() => {
+      browserWindow.webContents.send('scanner:log', logs);
+      logs = [];
+    }, 250);
+
     scanner.on('log', (log) => {
-      browserWindow.webContents.send('scanner:log', log);
+      logs.push(log);
+      sendLogsToWeb();
     });
-  
+
+    const sendStatusToWeb = throttle((statusList: GenericObject[]) => {
+      browserWindow.webContents.send('scanner:status', statusList);
+    }, 250);
+
     scanner.on('status', (statusList) => {
       // console.log('Sending status update:')
       // console.log(statusList)
-      browserWindow.webContents.send('scanner:status', statusList);
+      sendStatusToWeb(statusList);
     });
-  
+
+    const sendProgressToWeb = throttle((progress: number) => {
+      browserWindow.webContents.send('scanner:progress', progress);
+    }, 250);
+
     scanner.on('progress', (progress) => {
       // console.log('Sending progress update')
       // console.log(progress)
-      browserWindow.webContents.send('scanner:progress', progress);
+      sendProgressToWeb(progress);
     });
 
     try {
-      await scanner.scan(options);
+      scanner.scan(options);
       return {
         result: 'started',
         error: null,
@@ -265,12 +311,12 @@ async function createWindow() {
     analyzer = new ModbusAnalyzer();
 
     let logs: GenericObject[] = [];
-  
+
     const sendLogsToWeb = throttle(() => {
       browserWindow.webContents.send('analyzer:log', logs);
       logs = [];
     }, 250);
-  
+
     analyzer.on('log', (log) => {
       logs.push(log);
       sendLogsToWeb();
@@ -303,27 +349,41 @@ async function createWindow() {
 
   let server: null | ModbusServer = null;
 
-  ipcMain.handle('startServer', async (_event) => {
-    console.log('Starting Modbus server');
-
-    server = new ModbusServer({
-      baudRate: 19200,
-      dataBits: 8,
-      parity: 'none',
-      stopBits: 2,
-      port: 'COM14',
-      unitId: 1,
+  function asyncSleep(ms: number) {
+    return new Promise((resolve) => {
+      setTimeout(resolve, ms);
     });
-  
+  }
+
+  ipcMain.handle('startRtuServer', async (_event, config: ModbusRtuServerConfiguration) => {
+    console.log('Starting Modbus server');
+    if (server) {
+      console.log('Server already running, stopping...');
+      await server.stop();
+      server = null;
+      await asyncSleep(1000);
+      console.log('Server stopped, starting new one...');
+    }
+
+    server = new ModbusServer(config);
+
     server.on('log', (type, log) => {
       console.log('Got log from ModbusServer');
       browserWindow.webContents.send('server:log', type, log);
     });
   });
 
-  ipcMain.handle('getServerData', async (_event, { type, register, count}: ServerDataRequest) => {
+  ipcMain.handle('stopRtuServer', async (_event) => {
+    console.log('Stopping Modbus server');
+
+    server?.stop();
+
+    server = null;
+  });
+
+  ipcMain.handle('getServerData', async (_event, { type, register, count }: ServerDataRequest) => {
     if (!server) return;
-  
+
     console.log('Fetching data from Modbus server');
 
     return server.getData(type, register, count);
