@@ -136,6 +136,7 @@
               ></el-option>
             </el-select>
           </el-form-item>
+          <el-text class="tip">{{ modbusStore.selectedMbFunction?.description }}</el-text>
           <el-form-item
             v-for="parameter in modbusStore.mbOptions"
             :key="parameter.id"
@@ -163,8 +164,8 @@
     <el-col
       :span="24"
       :md="12"
-      :lg="9"
-      :xl="6"
+      :lg="15"
+      :xl="18"
     >
       <el-card>
         <template #header> Result </template>
@@ -179,6 +180,7 @@
             <el-descriptions
               :column="1"
               :border="true"
+              style="max-width: 300px"
             >
               <el-descriptions-item
                 v-if="response.timestamp"
@@ -200,6 +202,7 @@
             <el-table
               :data="response.result"
               height="600"
+              class="result-table"
               style="width: 100%"
             >
               <el-table-column
@@ -209,7 +212,51 @@
               />
               <el-table-column
                 prop="value"
-                label="Value"
+                label="INT16"
+                :formatter="onlyShowValidNumbers"
+                width="100"
+              />
+              <el-table-column
+                prop="uint16"
+                label="UINT16"
+                :formatter="onlyShowValidNumbers"
+                width="100"
+              />
+              <el-table-column
+                prop="int32"
+                label="INT32"
+                :formatter="onlyShowValidNumbers"
+                width="130"
+              />
+              <el-table-column
+                prop="uint32"
+                label="UINT32"
+                :formatter="onlyShowValidNumbers"
+                width="130"
+              />
+              <el-table-column
+                prop="int32_word_swapped"
+                label="INT32 (WS)"
+                :formatter="onlyShowValidNumbers"
+                width="130"
+              />
+              <el-table-column
+                prop="uint32_word_swapped"
+                label="UINT32 (W)"
+                :formatter="onlyShowValidNumbers"
+                width="130"
+              />
+              <el-table-column
+                prop="float32"
+                label="FLOAT32"
+                :formatter="onlyShowValidNumbers"
+                width="130"
+              />
+              <el-table-column
+                prop="float32_word_swapped"
+                label="FLOAT32 (WS)"
+                :formatter="onlyShowValidNumbers"
+                width="130"
               />
             </el-table>
           </template>
@@ -225,6 +272,7 @@
 
 <script lang="ts" setup>
 import {modbus} from '#preload';
+import type {TableColumnCtx} from 'element-plus';
 import {CONNECTION_TYPE, mbFunctions, useModbusStore} from '/@/components/useModbus';
 
 const modbusStore = useModbusStore();
@@ -233,6 +281,21 @@ const response: Ref<ModbusRequestResponse | null> = ref(null);
 
 function cancel() {
   response.value = null;
+}
+
+function onlyShowValidNumbers(
+  _row: unknown,
+  _column: TableColumnCtx<unknown>,
+  cellValue: unknown,
+  _index: number,
+): string {
+  if (cellValue === null || cellValue === undefined) {
+    return '';
+  }
+  if (typeof cellValue === 'number' && !Number.isNaN(cellValue)) {
+    return cellValue % 1 === 0 ? cellValue.toFixed(0) : cellValue.toFixed(2);
+  }
+  return '';
 }
 
 const performRequest = async () => {
@@ -314,4 +377,21 @@ onMounted(async () => {
 });
 </script>
 
-<style scoped></style>
+<style>
+.tip {
+  display: block;
+  font-size: 0.8em;
+  line-height: 1.45em;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-bottom: 18px;
+  background-color: #f5f5f5;
+  padding: 8px 5px;
+  border-left: 3px solid #ebebeb;
+  border-radius: 4px;
+}
+
+.result-table .el-table__cell {
+  text-align: right;
+}
+</style>

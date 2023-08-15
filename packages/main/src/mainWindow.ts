@@ -1,10 +1,18 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
-import { join, resolve } from 'node:path';
-import { throttle } from 'underscore';
-import { ModbusLoggerTCP, ModbusLoggerRTU, modbusTcpRequest, modbusRtuRequest, ModbusScannerRTU, ModbusScannerTCP, ModbusAnalyzer } from './modbus';
-import { getNetworkInfo } from './networkUtils';
-import { writeFile } from 'node:fs';
-import { ModbusServer } from './modbusServer';
+import {app, BrowserWindow, ipcMain, dialog} from 'electron';
+import {join, resolve} from 'node:path';
+import {throttle} from 'underscore';
+import {
+  ModbusServer,
+  ModbusLoggerTCP,
+  ModbusLoggerRTU,
+  modbusTcpRequest,
+  modbusRtuRequest,
+  ModbusScannerRTU,
+  ModbusScannerTCP,
+  ModbusAnalyzer,
+} from './modbus';
+import {getNetworkInfo} from './networkUtils';
+import {writeFile} from 'node:fs';
 import Store from 'electron-store';
 
 const store = new Store();
@@ -76,18 +84,21 @@ async function createWindow() {
     let defaultFileName = '';
     if (source) {
       const date = new Date();
-      defaultFileName = (source + ' ' + date.toLocaleString()).replaceAll(' ', '_').replaceAll('-', '').replaceAll(':', '');
+      defaultFileName = (source + ' ' + date.toLocaleString())
+        .replaceAll(' ', '_')
+        .replaceAll('-', '')
+        .replaceAll(':', '');
     }
 
-    const { canceled, filePath } = await dialog.showSaveDialog({
+    const {canceled, filePath} = await dialog.showSaveDialog({
       defaultPath: defaultFileName,
-      filters: [{ name: 'CSV', extensions: ['csv'] }],
+      filters: [{name: 'CSV', extensions: ['csv']}],
     });
 
     console.log('Dialog closed!');
 
     if (!canceled && filePath) {
-      writeFile(filePath, data, 'utf8', (err) => {
+      writeFile(filePath, data, 'utf8', err => {
         if (err) {
           console.error(err);
         }
@@ -109,7 +120,7 @@ async function createWindow() {
       logs = [];
     }, 250);
 
-    logger.on('log', (log) => {
+    logger.on('log', log => {
       logs.push(log);
       sendLogsToWeb();
     });
@@ -140,7 +151,7 @@ async function createWindow() {
       logs = [];
     }, 250);
 
-    logger.on('log', (log) => {
+    logger.on('log', log => {
       logs.push(log);
       sendLogsToWeb();
     });
@@ -209,7 +220,7 @@ async function createWindow() {
       logs = [];
     }, 250);
 
-    scanner.on('log', (log) => {
+    scanner.on('log', log => {
       logs.push(log);
       sendLogsToWeb();
     });
@@ -218,7 +229,7 @@ async function createWindow() {
       browserWindow.webContents.send('scanner:status', statusList);
     }, 250);
 
-    scanner.on('status', (statusList) => {
+    scanner.on('status', statusList => {
       // console.log('Sending status update:')
       // console.log(statusList)
       sendStatusToWeb(statusList);
@@ -228,12 +239,11 @@ async function createWindow() {
       browserWindow.webContents.send('scanner:progress', progress);
     }, 250);
 
-    scanner.on('progress', (progress) => {
+    scanner.on('progress', progress => {
       // console.log('Sending progress update')
       // console.log(progress)
       sendProgressToWeb(progress);
     });
-
 
     try {
       scanner.scan(options);
@@ -261,7 +271,7 @@ async function createWindow() {
       logs = [];
     }, 250);
 
-    scanner.on('log', (log) => {
+    scanner.on('log', log => {
       logs.push(log);
       sendLogsToWeb();
     });
@@ -270,7 +280,7 @@ async function createWindow() {
       browserWindow.webContents.send('scanner:status', statusList);
     }, 250);
 
-    scanner.on('status', (statusList) => {
+    scanner.on('status', statusList => {
       // console.log('Sending status update:')
       // console.log(statusList)
       sendStatusToWeb(statusList);
@@ -280,7 +290,7 @@ async function createWindow() {
       browserWindow.webContents.send('scanner:progress', progress);
     }, 250);
 
-    scanner.on('progress', (progress) => {
+    scanner.on('progress', progress => {
       // console.log('Sending progress update')
       // console.log(progress)
       sendProgressToWeb(progress);
@@ -317,7 +327,7 @@ async function createWindow() {
       logs = [];
     }, 250);
 
-    analyzer.on('log', (log) => {
+    analyzer.on('log', log => {
       logs.push(log);
       sendLogsToWeb();
     });
@@ -339,7 +349,7 @@ async function createWindow() {
     }
   });
 
-  ipcMain.handle('stopRtuAnalyzer', async (_event) => {
+  ipcMain.handle('stopRtuAnalyzer', async _event => {
     console.log('Stopping RTU Analyzer');
     if (analyzer) {
       await analyzer.stop();
@@ -350,7 +360,7 @@ async function createWindow() {
   let server: null | ModbusServer = null;
 
   function asyncSleep(ms: number) {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       setTimeout(resolve, ms);
     });
   }
@@ -373,7 +383,7 @@ async function createWindow() {
     });
   });
 
-  ipcMain.handle('stopRtuServer', async (_event) => {
+  ipcMain.handle('stopRtuServer', async _event => {
     console.log('Stopping Modbus server');
 
     server?.stop();
@@ -381,7 +391,7 @@ async function createWindow() {
     server = null;
   });
 
-  ipcMain.handle('getServerData', async (_event, { type, register, count }: ServerDataRequest) => {
+  ipcMain.handle('getServerData', async (_event, {type, register, count}: ServerDataRequest) => {
     if (!server) return;
 
     console.log('Fetching data from Modbus server');
@@ -416,4 +426,3 @@ export async function restoreOrCreateWindow() {
 
   window.focus();
 }
-

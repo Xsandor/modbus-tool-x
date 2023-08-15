@@ -102,6 +102,7 @@ network.getInfo();
 }
 
 body {
+  background-color: #fcfcfc;
   margin: 0;
   padding: 0;
 }
@@ -131,6 +132,12 @@ body {
   margin-top: 10px;
   /* var(--el-main-padding) */
 
+  > .el-card .el-card__body {
+    padding: 0;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
   .el-menu {
     border-right: 0;
   }
@@ -141,15 +148,15 @@ body {
 }
 
 .el-main {
-  max-height: calc(100vh - 60px - 20px - 8px);
+  max-height: calc(100vh - 60px);
   padding: 0;
 
-  > .el-scrollbar {
+  > .el-scrollbar:first-of-type {
     box-sizing: border-box;
-  }
 
-  .el-scrollbar__view {
-    padding: 20px 10px 20px 10px;
+    > .el-scrollbar__wrap > .el-scrollbar__view {
+      padding: 20px 10px 10px 10px;
+    }
   }
 }
 
@@ -161,5 +168,9 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.el-form-item__content .el-input {
+  max-width: 214px;
 }
 </style>

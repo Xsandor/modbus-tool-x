@@ -231,7 +231,10 @@
           </el-collapse>
         </el-card>
         <el-card header="Log">
-          <div class="log-container">
+          <div
+            v-if="resultLog.length"
+            class="log-container"
+          >
             <span
               v-for="(logRow, index) in resultLog"
               :key="'result-' + index"
@@ -239,6 +242,7 @@
               >{{ logRow.message }}</span
             >
           </div>
+          <el-text v-else>No log entries yet..</el-text>
         </el-card>
       </el-space>
     </el-col>
@@ -266,9 +270,27 @@ const enum ScanItemState {
 }
 
 const onlineItems = computed(() => {
-  return scanList.value.filter(
-    item => item.state === ScanItemState.Online || item.state === ScanItemState.OnlineNoResponse,
-  );
+  return scanList.value
+    .filter(
+      item => item.state === ScanItemState.Online || item.state === ScanItemState.OnlineNoResponse,
+    )
+    .map(item => {
+      let details = '';
+      if (item.meta.deviceType) {
+        details += `${item.meta.deviceType}
+`;
+      }
+      if (item.meta.deviceModel) {
+        details += `${item.meta.deviceModel}`;
+      }
+      if (item.meta.softwareVersion) {
+        details += ` v${item.meta.softwareVersion}`;
+      }
+      return {
+        ...item,
+        details,
+      };
+    });
 });
 
 const offlineItems = computed(() => {

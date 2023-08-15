@@ -193,14 +193,13 @@
             <ElInputNumber
               v-model.number="requestCount"
               :min="1"
-              :max="9999"
+              :max="10000"
             />
           </ElFormItem>
-          <ElFormItem label="Delay">
+          <ElFormItem label="Delay (ms)">
             <ElInputNumber
               v-model.number="requestDelay"
               :min="1"
-              :max="9999"
             />
           </ElFormItem>
           <ElFormItem>

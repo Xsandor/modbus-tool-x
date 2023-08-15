@@ -1,7 +1,7 @@
 <template>
   <el-row
     v-if="list.length"
-    :gutter="20"
+    :gutter="10"
   >
     <el-col
       v-for="item in list"
@@ -13,12 +13,17 @@
         :class="getStatusClass(item.state)"
         class="status-item"
       >
-        <h4 style="margin-top: 5px; margin-bottom: 3px">{{ item.id }}</h4>
-        <span
-          style="font-size: 0.8em"
-          :title="item.errorMessage"
-          >{{ item.stateText }}</span
-        >
+        <div style="flex: 1">
+          <h4 style="margin-top: 0; margin-bottom: 0">{{ item.id }}</h4>
+          <span
+            style="font-size: 0.75em"
+            :title="item.errorMessage"
+            >{{ item.stateText }}</span
+          >
+        </div>
+        <div style="text-align: right; font-size: 0.75em; white-space: pre">
+          {{ item.details }}
+        </div>
       </div>
     </el-col>
   </el-row>
@@ -51,8 +56,9 @@ function getStatusClass(state: number) {
 
 <style lang="scss">
 .status-item {
+  display: flex;
   border-radius: 5px;
-  padding: 1px 10px 5px 10px;
+  padding: 5px;
   color: #fff;
 
   &.state-waiting {
