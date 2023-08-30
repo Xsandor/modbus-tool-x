@@ -94,7 +94,7 @@ export function parseData(frame: MyModbusFrame, previousFrame: null | MyModbusFr
       break;
     case MB_FUNCTION.READ_FILE: {
       if (frame.type === FRAME_TYPE.REQUEST) {
-        console.log(`Frame data length: ${frame.data.length}`);
+        // console.log(`Frame data length: ${frame.data.length}`);
         const byteCount = frame.data.readInt8(0);
         const refType = frame.data.readInt8(1);
         const fileNumber = frame.data.readUInt16BE(2); // 64054
@@ -103,10 +103,10 @@ export function parseData(frame: MyModbusFrame, previousFrame: null | MyModbusFr
         // const recordData = frame.data.slice(8, 8 + recordLength * 2); // 3
         if (byteCount === 7 && refType === 6) {
           if (fileNumber <= 0x0010) {
-            console.log('Request: Read parameter group');
+            // console.log('Request: Read parameter group');
             return `Request group ${recordNumber}`;
           } else {
-            console.log('Request: Read parameter properties');
+            // console.log('Request: Read parameter properties');
             return `Request parameter ${recordNumber}`;
           }
         } else if (byteCount === 7 && refType === 7) {
@@ -121,11 +121,11 @@ export function parseData(frame: MyModbusFrame, previousFrame: null | MyModbusFr
         const refType = frame.data.readInt8(2);
         const data = frame.data.slice(3);
         if (responseDataLength === 0x20 && subReqResponseLength === 0x1f && refType === 6) {
-          console.log('Response: Read parameter group');
+          // console.log('Response: Read parameter group');
           const groupNumber = data.slice(0, 2);
-          console.log(groupNumber.toString());
+          // console.log(groupNumber.toString());
           const groupName = data.slice(2);
-          console.log(groupName);
+          // console.log(groupName);
           return `Group ${groupNumber} = ${groupName}`;
         }
         if (responseDataLength === 0x12 && subReqResponseLength === 0x11 && refType === 7) {
@@ -172,7 +172,7 @@ export function parseData(frame: MyModbusFrame, previousFrame: null | MyModbusFr
 
   if (frame.mbFunction && frame.mbFunction >= EXCEPTION_CODE) {
     const exceptionCode: number = frame.data.readInt8(0);
-    console.log(`Exception code: ${exceptionCode}`);
+    // console.log(`Exception code: ${exceptionCode}`);
     if (exceptionCode in EXCEPTION_CODES) {
       return EXCEPTION_CODES[exceptionCode];
     }

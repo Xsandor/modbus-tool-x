@@ -2,7 +2,6 @@ import {app, BrowserWindow, ipcMain, dialog} from 'electron';
 import {join, resolve} from 'node:path';
 import {throttle} from 'underscore';
 import {
-  ModbusServer,
   ModbusLoggerTCP,
   ModbusLoggerRTU,
   modbusTcpRequest,
@@ -10,10 +9,14 @@ import {
   ModbusScannerRTU,
   ModbusScannerTCP,
   ModbusAnalyzer,
+  RegisterScanner,
+  DanfossEKC,
 } from './modbus';
+import {ModbusServer} from './modbus';
 import {getNetworkInfo} from './networkUtils';
 import {writeFile} from 'node:fs';
 import Store from 'electron-store';
+import {sleep} from './modbus/utilities';
 
 const store = new Store();
 
@@ -79,8 +82,6 @@ async function createWindow() {
   });
 
   ipcMain.handle('saveCSV', async (_event, data, source: null | string) => {
-    console.log('Will save file!');
-    // console.log(data)
     let defaultFileName = '';
     if (source) {
       const date = new Date();
@@ -95,8 +96,6 @@ async function createWindow() {
       filters: [{name: 'CSV', extensions: ['csv']}],
     });
 
-    console.log('Dialog closed!');
-
     if (!canceled && filePath) {
       writeFile(filePath, data, 'utf8', err => {
         if (err) {
@@ -109,8 +108,6 @@ async function createWindow() {
   let logger: ModbusLoggerRTU | ModbusLoggerTCP | null = null;
 
   ipcMain.handle('startTcpLogger', async (_event, configuration) => {
-    // console.log('Start TCP Scan');
-    // console.log(options)
     logger = new ModbusLoggerTCP();
 
     let logs: GenericObject[] = [];
@@ -140,8 +137,6 @@ async function createWindow() {
   });
 
   ipcMain.handle('startRtuLogger', async (_event, configuration) => {
-    // console.log('Start TCP Scan');
-    // console.log(options)
     logger = new ModbusLoggerRTU();
 
     let logs: GenericObject[] = [];
@@ -176,8 +171,6 @@ async function createWindow() {
   }
 
   ipcMain.handle('performTcpRequest', async (_event, configuration) => {
-    // console.log('Modbus TCP request')
-    // console.log(configuration)
     try {
       return modbusTcpRequest(configuration);
     } catch (error) {
@@ -191,8 +184,6 @@ async function createWindow() {
   });
 
   ipcMain.handle('performRtuRequest', async (_event, configuration) => {
-    // console.log('Modbus RTU request')
-    // console.log(configuration)
     try {
       return modbusRtuRequest(configuration);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -230,8 +221,6 @@ async function createWindow() {
     }, 250);
 
     scanner.on('status', statusList => {
-      // console.log('Sending status update:')
-      // console.log(statusList)
       sendStatusToWeb(statusList);
     });
 
@@ -240,8 +229,6 @@ async function createWindow() {
     }, 250);
 
     scanner.on('progress', progress => {
-      // console.log('Sending progress update')
-      // console.log(progress)
       sendProgressToWeb(progress);
     });
 
@@ -281,8 +268,6 @@ async function createWindow() {
     }, 250);
 
     scanner.on('status', statusList => {
-      // console.log('Sending status update:')
-      // console.log(statusList)
       sendStatusToWeb(statusList);
     });
 
@@ -291,8 +276,6 @@ async function createWindow() {
     }, 250);
 
     scanner.on('progress', progress => {
-      // console.log('Sending progress update')
-      // console.log(progress)
       sendProgressToWeb(progress);
     });
 
@@ -308,6 +291,79 @@ async function createWindow() {
         error: 'Port already in use',
       };
     }
+  });
+
+  let registerScanner: null | RegisterScanner = null;
+
+  ipcMain.handle('RegisterScanner:start', async (_event, serialPortConfiguration, unitId) => {
+    if (registerScanner) {
+      console.log('Register scanner already initiated, closing...');
+      await registerScanner.close();
+      registerScanner = null;
+      await sleep(100);
+    }
+    console.log('Initiating register scanner');
+    registerScanner = new RegisterScanner(serialPortConfiguration, unitId);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sendProgressToWeb = throttle((progress: any) => {
+      browserWindow.webContents.send('RegisterScanner:progress', progress);
+    }, 250);
+
+    registerScanner.on('progress', sendProgressToWeb);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sendFoundRegistersToWeb = throttle((foundRegisters: any) => {
+      browserWindow.webContents.send('RegisterScanner:foundRegisters', foundRegisters);
+    }, 250);
+
+    registerScanner.on('foundRegisters', sendFoundRegistersToWeb);
+
+    registerScanner.start();
+  });
+
+  let danfossEkc: null | DanfossEKC = null;
+
+  ipcMain.handle('EKC:initiate', async (_event, serialPortConfiguration, unitId) => {
+    if (danfossEkc) {
+      console.log('Danfoss EKC device already initiated, closing...');
+      await danfossEkc.close();
+      danfossEkc = null;
+      await sleep(100);
+    }
+    console.log('Initiating Danfoss EKC device');
+    danfossEkc = new DanfossEKC(serialPortConfiguration, unitId);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sendStatusToWeb = throttle((status: any) => {
+      browserWindow.webContents.send('EKC:status', status);
+    }, 250);
+
+    danfossEkc.on('status', sendStatusToWeb);
+
+    danfossEkc.on('parameterData', data => {
+      browserWindow.webContents.send('EKC:parameterData', data);
+    });
+
+    const device = await danfossEkc.initiate();
+
+    return device;
+  });
+
+  ipcMain.handle('EKC:setActiveGroup', async (_event, groupId) => {
+    if (!danfossEkc) {
+      return;
+    }
+    danfossEkc.setActiveGroup(groupId);
+    return;
+  });
+
+  ipcMain.handle('EKC:writeParameter', async (_event, pnu, value) => {
+    if (!danfossEkc) {
+      return;
+    }
+    console.log('Writing new value to:', pnu, value);
+    return await danfossEkc.writeParameter(pnu, value);
   });
 
   let analyzer: ModbusAnalyzer | null = null;
@@ -359,19 +415,20 @@ async function createWindow() {
 
   let server: null | ModbusServer = null;
 
-  function asyncSleep(ms: number) {
-    return new Promise(resolve => {
-      setTimeout(resolve, ms);
-    });
-  }
-
   ipcMain.handle('startRtuServer', async (_event, config: ModbusRtuServerConfiguration) => {
     console.log('Starting Modbus server');
+    // const child = utilityProcess
+    //   .fork(path.join(__dirname, '../../utilities/dist/index.cjs'))
+    //   .on('spawn', () => {
+    //     console.log('spawned new utilityProcess');
+    //     child.postMessage({request: 'startRtuServer', config});
+    //   })
+    //   .on('exit', _code => console.log('existing utilityProcess'));
     if (server) {
       console.log('Server already running, stopping...');
       await server.stop();
       server = null;
-      await asyncSleep(1000);
+      await sleep(1000);
       console.log('Server stopped, starting new one...');
     }
 

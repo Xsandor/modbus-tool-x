@@ -101,5 +101,31 @@ const rendererWatchServer = await createServer({
   configFile: 'packages/renderer/vite.config.js',
 }).then(s => s.listen());
 
+// function setupUtilitiesPackageWatcher({ws}) {
+//   return build({
+//     mode,
+//     logLevel,
+//     configFile: 'packages/utilities/vite.config.js',
+//     build: {
+//       /**
+//        * Set to {} to enable rollup watcher
+//        * @see https://vitejs.dev/config/build-options.html#build-watch
+//        */
+//       watch: {},
+//     },
+//     plugins: [
+//       {
+//         name: 'reload-page-on-utilities-package-change',
+//         writeBundle() {
+//           ws.send({
+//             type: 'full-reload',
+//           });
+//         },
+//       },
+//     ],
+//   });
+// }
+
 await setupPreloadPackageWatcher(rendererWatchServer);
 await setupMainPackageWatcher(rendererWatchServer);
+// await setupUtilitiesPackageWatcher(rendererWatchServer);

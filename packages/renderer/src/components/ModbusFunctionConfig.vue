@@ -1,0 +1,76 @@
+<template>
+  <el-form-item label="Modbus Function">
+    <el-select
+      v-model="mbFunction"
+      placeholder="Modbus function"
+    >
+      <el-option
+        v-for="item in mbFunctions"
+        :key="item.id"
+        :label="item.name"
+        :value="item.id"
+      ></el-option>
+    </el-select>
+  </el-form-item>
+  <el-text class="tip">{{ modbusStore.selectedMbFunction?.description }}</el-text>
+  <template v-for="parameter in modbusStore.mbOptions">
+    <template v-if="parameter.type === 'numberArray'">
+      <el-form-item
+        v-for="index in parameter.values!.length"
+        :key="parameter.id + ':' + (index - 1)"
+        :label="parameter.label + ' ' + index"
+      >
+        <el-input-number
+          v-model.number="parameter.values![index - 1]"
+          type="number"
+          :min="parameter.min"
+          :max="parameter.max"
+        />
+      </el-form-item>
+      <el-button
+        :key="parameter.id + '-btn'"
+        @click="addValue(parameter)"
+        >+</el-button
+      >
+    </template>
+    <el-form-item
+      v-else
+      :key="parameter.id"
+      :label="parameter.label"
+    >
+      <el-input-number
+        v-model.number="parameter.value"
+        :type="parameter.type"
+        :min="parameter.min"
+        :max="parameter.max"
+      />
+    </el-form-item>
+  </template>
+</template>
+
+<script setup lang="ts">
+import {useModbusStore, mbFunctions} from '/@/stores/useModbus';
+
+const modbusStore = useModbusStore();
+
+const props = defineProps({
+  modelValue: {
+    type: Number,
+    required: true,
+  },
+});
+
+const emit = defineEmits(['update:modelValue']);
+
+const mbFunction = computed({
+  get: () => props.modelValue,
+  set: value => emit('update:modelValue', value),
+});
+
+function addValue(parameter: MbOption) {
+  if (parameter.values && parameter.values.length < parameter.maxLength!) {
+    const previousValue = parameter.values[parameter.values.length - 1];
+    parameter.values.push(previousValue + 1);
+  }
+}
+</script>

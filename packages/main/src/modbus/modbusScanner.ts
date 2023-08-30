@@ -2,8 +2,8 @@ import ModbusRTU from 'modbus-serial';
 import {Semaphore} from 'async-mutex';
 import {EventEmitter} from 'events';
 import {range} from 'underscore';
-import {getIpList} from '../networkUtils';
-import {sleep} from './utilities';
+import {getIpList, validateIPv4} from '../networkUtils';
+import {sleep, logger} from './utilities';
 import {
   DANFOSS_MODEL_FILE_NUMBER,
   DANFOSS_MODEL_REF_TYPE,
@@ -15,7 +15,15 @@ import {
 } from './danfoss';
 import {REGISTER_OFFSET} from './modbusCommon';
 
+const log = logger.createLogger('Modbus Scanner');
+
 const MAX_TCP_CONNECTIONS = 10;
+const SCAN_REGISTER = 0;
+
+function timeSince(start: [number, number]) {
+  const [elapsedSec, elapsedNano] = process.hrtime(start);
+  return `${elapsedSec}.${(elapsedNano / 1000000).toFixed().padStart(3, '0')}s`;
+}
 
 enum ScanState {
   Waiting = 0,
@@ -26,38 +34,76 @@ enum ScanState {
   Error = 5,
 }
 
-const tcpSemaphore = new Semaphore(MAX_TCP_CONNECTIONS);
+interface ModbusScannerEventMap {
+  log: ScanLogItem;
+  progress: ScanProgress;
+  status: ScanItem[];
+}
 
 class ModbusScanner extends EventEmitter {
   scanList: ScanItem[];
+  itemsScanned: number;
+  stateList: string[];
+  scanStartedAt: undefined | [number, number];
   foundUnits: number;
 
   constructor() {
     super();
     this.scanList = [];
+    this.stateList = [];
+    this.itemsScanned = 0;
     this.foundUnits = 0;
   }
 
-  log(type: LogType, message: string) {
-    this.emit('log', {
+  public setScanItemState(scanItem: ScanItem, state: ScanState) {
+    scanItem.state = state;
+    scanItem.stateText = this.stateList[state];
+  }
+
+  emit<K extends keyof ModbusScannerEventMap>(
+    eventName: K,
+    eventData: ModbusScannerEventMap[K],
+  ): boolean {
+    return super.emit(eventName, eventData);
+  }
+
+  protected reportStatus() {
+    this.emit('status', this.scanList);
+  }
+
+  protected reportProgress() {
+    let progress = 0;
+
+    if (this.itemsScanned && this.scanList.length) {
+      progress = (this.itemsScanned / this.scanList.length) * 100;
+    }
+
+    this.emit('progress', [progress, this.foundUnits]);
+  }
+
+  protected log(type: LogType, message: string) {
+    let text = message;
+
+    log.info(message);
+
+    if (this.scanStartedAt) {
+      text = `${timeSince(this.scanStartedAt)}: ${message}`;
+    }
+
+    const logData = {
       type,
-      message,
-    });
+      text,
+    };
+
+    this.emit('log', logData);
   }
 }
 
-function timeSince(start: [number, number]) {
-  const [elapsedSec, elapsedNano] = process.hrtime(start);
-  return `${elapsedSec}.${(elapsedNano / 1000000).toFixed().padStart(3, '0')}s`;
-}
-
 export class ModbusScannerTCP extends ModbusScanner {
-  scanList: ScanItem[];
-  stateList: string[];
+  semaphore: Semaphore;
+
   constructor() {
     super();
-    this.scanList = [];
-    this.stateList = [];
     this.stateList[ScanState.Waiting] = 'Waiting';
     this.stateList[ScanState.Scanning] = 'Scanning';
     this.stateList[ScanState.Online] = 'Online';
@@ -65,14 +111,153 @@ export class ModbusScannerTCP extends ModbusScanner {
     this.stateList[ScanState.Online_But_No_Response] = 'Server online but no response';
     this.stateList[ScanState.Error] = 'Error';
 
-    this.emit('log', 'Scanner initiated!');
+    this.semaphore = new Semaphore(MAX_TCP_CONNECTIONS);
+
+    this.log('info', 'Scanner initiated!');
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private handleRequestError(id: string | number, error: any) {
+    if (!error.message && !(error instanceof Error)) {
+      log.info(error);
+      this.log('error', 'Unexpected error!');
+
+      return {
+        state: ScanState.Online_But_No_Response,
+        stateText: 'Error',
+        errorMessage: 'Unexpected error',
+      };
+      // return false;
+    }
+
+    // if err.name === 'TransactionTimedOutError'
+    if (error.message.startsWith('Modbus exception')) {
+      this.log('info', `Unit gave response with a modbus exception(${error.message})`);
+      return {
+        state: ScanState.Online,
+        stateText: this.stateList[ScanState.Online],
+        errorMessage: `Unit ID: ${id}. ${error.message} `,
+      };
+      // this.foundUnits++;
+      // return true;
+    } else {
+      this.log('warning', `Unit is not responding(${error.message})`);
+      return {
+        state: ScanState.Online_But_No_Response,
+        stateText: this.stateList[ScanState.Online_But_No_Response],
+        errorMessage: `${error.message} (${error.name})`,
+      };
+      // return false;
+    }
   }
 
   async scan({startIp, endIp, port, minUnitId, maxUnitId, timeout}: ModbusTcpScanConfiguration) {
-    const start = process.hrtime();
-    // console.log('Start:')
-    // console.log(start[0])
-    // console.log(start[1])
+    // Check if start IP and end IP are valid
+    if (!validateIPv4(startIp) || !validateIPv4(endIp)) {
+      throw new TypeError('Start IP or end IP is not a valid IPv4 address');
+    }
+
+    if (minUnitId > maxUnitId) {
+      throw new Error('minUnitId cannot be higher than maxUnitId');
+    }
+
+    this.generateScanList(startIp, endIp);
+
+    this.scanStartedAt = process.hrtime();
+
+    this.reportStatus();
+
+    this.reportProgress();
+
+    const searchSlaves = async (scanItem: ScanItem) => {
+      const client = new ModbusRTU();
+      client.setTimeout(timeout);
+
+      const ip = scanItem.id as string;
+      this.log('info', `Checking if server at ${ip}:${port} `);
+      this.setScanItemState(scanItem, ScanState.Scanning);
+
+      try {
+        await client.connectTCP(ip, {port});
+        this.log('success', `Server alive at ${ip}:${port} `);
+
+        const checkUnitId = async (id: UnitId) => {
+          if (!client.isOpen) {
+            log.info('Reconnecting to host');
+            await client.connectTCP(ip, {port});
+          }
+          this.log('info', `Checking if unitID ${id} responds`);
+          // try to read a known register that exists on each controller
+          client.setID(id);
+          try {
+            await client.readHoldingRegisters(SCAN_REGISTER, 1);
+            // if data exists outputs success
+            this.log('success', 'Unit is online');
+            this.setScanItemState(scanItem, ScanState.Online);
+            scanItem.errorMessage = `Unit ID: ${id}.Online`;
+            this.foundUnits++;
+            return true;
+
+            // if no response and timeout kicks in script assumes no slave exists on this address.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } catch (error: any) {
+            const result = this.handleRequestError(id, error);
+            scanItem.state = result.state;
+            scanItem.stateText = result.stateText;
+            scanItem.errorMessage = result.errorMessage;
+
+            if (scanItem.state === ScanState.Online) {
+              this.foundUnits++;
+              return true;
+            }
+
+            return false;
+          }
+        };
+
+        this.setScanItemState(scanItem, ScanState.Scanning);
+
+        for (let id = minUnitId; id <= maxUnitId; id++) {
+          const unitOK = await checkUnitId(id);
+          if (unitOK) {
+            break;
+          }
+        }
+
+        client.close(() => null);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } catch (error: any) {
+        if (!error.message && !(error instanceof Error)) {
+          log.info(error);
+          this.log('error', 'Unexpected error!');
+          this.setScanItemState(scanItem, ScanState.Error);
+          scanItem.errorMessage = 'Unexpected error';
+          return false;
+        }
+        // log.info(error)
+        this.log('warning', `Unable to connect to ${ip}:${port}`);
+        // log.info(`${timeSince(start)}: Unable to connect to ${ip}:${port} `)
+        this.setScanItemState(scanItem, ScanState.Offline);
+        scanItem.errorMessage = error.message;
+      } finally {
+        this.itemsScanned++;
+        this.reportStatus();
+        this.reportProgress();
+      }
+    };
+
+    const promises = this.scanList.map(item => {
+      // semaphore.runExclusive() will make sure that only MAX_TCP_CONNECTIONS are running at the same time
+      return this.semaphore.runExclusive(() => searchSlaves(item));
+    });
+
+    await Promise.all(promises);
+
+    this.log('info', `Scan completed after ${timeSince(this.scanStartedAt)}`);
+  }
+
+  private generateScanList(startIp: string, endIp: string) {
     this.scanList = getIpList(startIp, endIp).map(ip => {
       return {
         meta: {},
@@ -82,152 +267,15 @@ export class ModbusScannerTCP extends ModbusScanner {
         errorMessage: '',
       };
     });
-
-    this.emit('status', this.scanList);
-    this.emit('progress', [0, this.foundUnits]);
-
-    const searchSlaves = async (scanItem: ScanItem) => {
-      const client = new ModbusRTU();
-      client.setTimeout(timeout);
-
-      const ip = scanItem.id as string;
-      this.log('info', `${timeSince(start)}: Checking if server at ${ip}:${port} `);
-      scanItem.state = 1;
-      scanItem.stateText = this.stateList[ScanState.Scanning];
-
-      try {
-        await client.connectTCP(ip, {port});
-        this.log('success', `${timeSince(start)}: Server alive at ${ip}:${port} `);
-
-        const checkUnitId = async (id: UnitId) => {
-          if (!client.isOpen) {
-            console.log('Reconnecting to host');
-            await client.connectTCP(ip, {port});
-          }
-          this.log('info', `${timeSince(start)}: Checking if unitID ${id} responds`);
-          // try to read a known register that exists on each controller
-          client.setID(id);
-          try {
-            await client.readHoldingRegisters(0, 1);
-            // if data exists outputs success
-            this.log('success', `${timeSince(start)}: Unit is online`);
-            scanItem.state = ScanState.Online;
-            scanItem.stateText = this.stateList[ScanState.Online];
-            scanItem.errorMessage = `Unit ID: ${id}.Online`;
-            this.foundUnits++;
-            return true;
-
-            // if no response and timeout kicks in script assumes no slave exists on this address.
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } catch (error: any) {
-            if (!error.message && !(error instanceof Error)) {
-              console.log(error);
-              this.log('error', `${timeSince(start)}: Unexpected error!`);
-              scanItem.state = ScanState.Online_But_No_Response;
-              scanItem.stateText = 'Error';
-              scanItem.errorMessage = 'Unexpected error';
-              return false;
-            }
-
-            // if err.name === 'TransactionTimedOutError'
-            if (error.message.startsWith('Modbus exception')) {
-              this.log(
-                'info',
-                `${timeSince(start)}: Unit gave response with a modbus exception(${error.message})`,
-              );
-              scanItem.state = ScanState.Online;
-              scanItem.stateText = this.stateList[ScanState.Online];
-              scanItem.errorMessage = `Unit ID: ${id}. ${error.message} `;
-              this.foundUnits++;
-              return true;
-            } else {
-              this.log('warning', `${timeSince(start)}: Unit is not responding(${error.message})`);
-              // console.log(`${error.message} -> Unit is considered to be offline`);
-              // console.log(err.message)
-              scanItem.state = ScanState.Online_But_No_Response;
-              scanItem.stateText = this.stateList[ScanState.Online_But_No_Response];
-              scanItem.errorMessage = `${error.message} (${error.name})`;
-              return false;
-            }
-          }
-        };
-
-        for (let id = minUnitId; id <= maxUnitId; id++) {
-          scanItem.state = ScanState.Scanning;
-          scanItem.stateText = this.stateList[ScanState.Scanning];
-          const unitOK = await checkUnitId(id);
-          if (unitOK) {
-            // console.log(`${ ip } -${ id }: Will exit for loop!`)
-            break;
-          }
-          // console.log(`${ ip } - ${ id }: Will continue for loop`)
-        }
-        // console.log(`${ ip }: Will break connection!`)
-        client.close(() => null);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (error: any) {
-        if (!error.message && !(error instanceof Error)) {
-          console.log(error);
-          this.log('error', `${timeSince(start)}: Unexpected error!`);
-          scanItem.state = ScanState.Error;
-          scanItem.stateText = this.stateList[ScanState.Error];
-          scanItem.errorMessage = 'Unexpected error';
-          return false;
-        }
-        // console.log(error)
-        this.log('warning', `${timeSince(start)}: Unable to connect to ${ip}:${port} `);
-        // console.log(`${timeSince(start)}: Unable to connect to ${ip}:${port} `)
-        scanItem.state = ScanState.Offline;
-        scanItem.stateText = this.stateList[ScanState.Offline];
-        scanItem.errorMessage = error.message;
-      }
-
-      this.emit('status', this.scanList);
-
-      const itemsScanned = this.scanList.reduce((acc, item) => {
-        if (item.state > ScanState.Scanning) {
-          acc++;
-        }
-        return acc;
-      }, 0);
-
-      const progress = (itemsScanned / this.scanList.length) * 100;
-
-      this.emit('progress', [progress, this.foundUnits]);
-
-      // if (host === endIp) {
-      //
-      //   return
-      // }
-    };
-
-    const promises = this.scanList.map(item => {
-      return tcpSemaphore.runExclusive(() => searchSlaves(item));
-    });
-
-    await Promise.all(promises);
-    // console.log('Done!');
-    // const end = process.hrtime()
-    // console.log('End:')
-    // console.log(start[0])
-    // console.log(start[1])
-
-    // console.log('Diff:')
-    // console.log(process.hrtime(start)[0])
-    // console.log(process.hrtime(start)[1])
-    const executionTime = process.hrtime(start)[1] / 1000000; // divide by a million to get nano to milli
-    // console.log(`${(new Date).getTime()} `)
-    this.log('info', `Scan completed after ${executionTime.toFixed(1)} ms`);
   }
 }
 
 export class ModbusScannerRTU extends ModbusScanner {
-  stateList: string[];
   constructor() {
     super();
     this.stateList = ['Waiting', 'Scanning', 'Alive', 'Unavailable', 'Dead'];
 
-    this.emit('log', 'Scanner initiated!');
+    this.log('info', 'Scanner initiated!');
   }
 
   async scan({
@@ -241,19 +289,17 @@ export class ModbusScannerRTU extends ModbusScanner {
     maxUnitId,
     delay,
   }: ModbusRtuScanConfiguration) {
-    const start = process.hrtime();
-    this.emit('status', this.scanList);
-    this.emit('progress', [0, this.foundUnits]);
+    if (minUnitId > maxUnitId) {
+      throw new Error('minUnitId cannot be higher than maxUnitId');
+    }
 
-    this.scanList = range(minUnitId, maxUnitId + 1).map((unitId: UnitId) => {
-      return {
-        id: unitId,
-        meta: {},
-        state: 0,
-        stateText: this.stateList[0],
-        errorMessage: '',
-      };
-    });
+    this.generateScanList(minUnitId, maxUnitId);
+
+    this.scanStartedAt = process.hrtime();
+
+    this.reportStatus();
+
+    this.reportProgress();
 
     const searchSlaves = async () => {
       const client = new ModbusRTU();
@@ -264,12 +310,9 @@ export class ModbusScannerRTU extends ModbusScanner {
         this.log('success', `Opened ${port} successfully`);
 
         const checkUnitId = async (scanItem: ScanItem) => {
+          this.setScanItemState(scanItem, ScanState.Scanning);
           const id = scanItem.id as number;
-          // if (!client.isOpen) {
-          //   console.log('Reconnecting to host')
-          //   await client.connectTCP(ip, { port })
-          // }
-          this.log('info', `${timeSince(start)}: Checking if unitID ${id} responds`);
+          this.log('info', `Checking if unitID ${id} responds`);
           // try to read a known register that exists on each controller
           client.setID(id);
           try {
@@ -283,14 +326,11 @@ export class ModbusScannerRTU extends ModbusScanner {
             // if data exists outputs success
             this.log(
               'success',
-              `${timeSince(start)}: Unit is online (v${danfossVersion.versionMajor}.${
-                danfossVersion.versionMinor
-              })`,
+              `Unit is online (v${danfossVersion.versionMajor}.${danfossVersion.versionMinor})`,
             );
             scanItem.meta.softwareVersion =
               danfossVersion.versionMajor + '.' + danfossVersion.versionMinor;
-            scanItem.state = ScanState.Online;
-            scanItem.stateText = this.stateList[ScanState.Online];
+            this.setScanItemState(scanItem, ScanState.Online);
             scanItem.errorMessage = `Unit ID: ${id}.Online`;
             this.foundUnits++;
             return true;
@@ -299,63 +339,50 @@ export class ModbusScannerRTU extends ModbusScanner {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } catch (error: any) {
             if (!error.message && !(error instanceof Error)) {
-              console.log(error);
-              this.log('error', `${timeSince(start)}: Unexpected error!`);
-              scanItem.state = ScanState.Error;
-              scanItem.stateText = this.stateList[ScanState.Error];
+              log.info(error);
+              this.log('error', 'Unexpected error!');
+              this.setScanItemState(scanItem, ScanState.Error);
               scanItem.errorMessage = 'Unexpected error';
               return false;
             }
 
             // if err.name === 'TransactionTimedOutError'
             if (error.message.startsWith('Modbus exception')) {
-              this.log(
-                'info',
-                `${timeSince(start)}: Unit gave response with a modbus exception(${error.message})`,
-              );
-              scanItem.state = ScanState.Online;
-              scanItem.stateText = this.stateList[ScanState.Online];
+              this.log('info', `Unit gave response with a modbus exception(${error.message})`);
+              // TODO: Make a setState function that takes a ScanItem and a ScanState, and sets the state and stateText, also allow for a custom error message
+
+              this.setScanItemState(scanItem, ScanState.Online);
               scanItem.errorMessage = `Unit ID: ${id}. ${error.message} `;
               this.foundUnits++;
               return true;
             } else {
-              this.log('warning', `${timeSince(start)}: Unit is not responding(${error.message})`);
-              // console.log(`${error.message} -> Unit is considered to be offline`);
-              // console.log(err.message)
-              scanItem.state = ScanState.Offline;
-              scanItem.stateText = this.stateList[ScanState.Offline];
+              this.log('warning', `Unit is not responding(${error.message})`);
+              // log.info(`${error.message} -> Unit is considered to be offline`);
+              // log.info(err.message)
+              this.setScanItemState(scanItem, ScanState.Offline);
               scanItem.errorMessage = `${error.message} (${error.name})`;
               return false;
             }
+          } finally {
+            this.itemsScanned++;
           }
         };
 
         for (const scanItem of this.scanList) {
-          scanItem.state = ScanState.Scanning;
-          scanItem.stateText = this.stateList[ScanState.Scanning];
           await checkUnitId(scanItem);
 
-          this.emit('status', this.scanList);
+          this.reportStatus();
           await sleep(delay);
 
-          const itemsScanned = this.scanList.reduce((acc, item) => {
-            if (item.state > 1) {
-              acc++;
-            }
-            return acc;
-          }, 0);
-
-          const progress = (itemsScanned / this.scanList.length) * 100;
-
-          this.emit('progress', [progress, this.foundUnits]);
+          this.reportProgress();
         }
 
         const checkDanfossModel = async (scanItem: ScanItem) => {
           const id = scanItem.id as number;
-          this.log('info', `${timeSince(start)}: Checking Danfoss Model for unitID ${id}`);
+          this.log('info', `Checking Danfoss Model for unitID ${id}`);
           // try to read a known register that exists on each controller
           client.setID(id);
-          console.log(`${timeSince(start)}: Checking Danfoss Model for unitID ${id}`);
+          log.info(`Checking Danfoss Model for unitID ${id}`);
           const modbusRequest = client.readFileRecords(
             DANFOSS_MODEL_FILE_NUMBER,
             DANFOSS_MODEL_RECORD_NUMBER,
@@ -364,43 +391,52 @@ export class ModbusScannerRTU extends ModbusScanner {
           );
 
           const result = await modbusRequest;
-          console.log(`${timeSince(start)}: Result`);
+
           if (result.data) {
-            console.log(result.data);
-            this.log('info', `${timeSince(start)}: ${result.data}`);
+            this.log('info', `${result.data}`);
             const danfossDevice = parseDanfossOrderNumber(result.data as string);
             scanItem.meta.deviceType = 'Danfoss ' + danfossDevice.protocolFamily;
             scanItem.meta.deviceModel = danfossDevice.orderNumber;
           } else {
-            console.log(result);
+            log.info(result);
           }
-          scanItem.state = ScanState.Online;
-          scanItem.stateText = this.stateList[ScanState.Online];
+          this.setScanItemState(scanItem, ScanState.Online);
           scanItem.errorMessage = `Unit ID: ${id}.Online`;
         };
 
         // Loop over all units that we received a versionNumber from and device model from them
         for (const scanItem of this.scanList.filter(item => item.meta.softwareVersion)) {
-          scanItem.state = ScanState.Scanning;
-          scanItem.stateText = this.stateList[ScanState.Scanning];
+          this.setScanItemState(scanItem, ScanState.Scanning);
           await checkDanfossModel(scanItem);
 
-          this.emit('status', this.scanList);
+          this.reportStatus();
           await sleep(delay);
         }
 
-        // console.log(`${ ip }: Will break connection!`)
+        // log.info(`${ ip }: Will break connection!`)
         client.close(() => null);
       } catch (error) {
-        console.log(error);
+        log.info(error);
         this.log('warning', `Unable to open ${port} `);
         throw error;
       }
     };
 
     await searchSlaves();
-    // console.log('Done!');
+    // log.info('Done!');
     this.log('info', 'Scan complete!');
-    this.emit('progress', [100, this.foundUnits]);
+    this.reportProgress();
+  }
+
+  private generateScanList(minUnitId: number, maxUnitId: number) {
+    this.scanList = range(minUnitId, maxUnitId + 1).map((unitId: UnitId) => {
+      return {
+        id: unitId,
+        meta: {},
+        state: ScanState.Waiting,
+        stateText: this.stateList[ScanState.Waiting],
+        errorMessage: '',
+      };
+    });
   }
 }

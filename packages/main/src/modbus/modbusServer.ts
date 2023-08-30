@@ -4,10 +4,12 @@ import {EventEmitter} from 'events';
 import type {ModbusServerVector, SerialServerOptions} from 'modbus-serial';
 import type {SerialPortOptions} from 'modbus-serial/ModbusRTU';
 import {ServerSerial} from 'modbus-serial';
+import {logger} from './utilities';
+
+const log = logger.createLogger('Modbus Server');
 
 // const HOST = "0.0.0.0"
 // const PORT = 8502
-const DEBUG = process.env.NODE_ENV !== 'production';
 
 const minAddress = 0;
 
@@ -29,12 +31,6 @@ const ILLEGAL_ADDRESS_ERROR = {
   msg: 'Invalid address',
 };
 
-const log = {
-  debug: DEBUG ? console.log : () => null,
-  info: console.log,
-  error: console.error,
-};
-
 const WILDCARD_UNIT_ID = 255;
 
 export class ModbusServer extends EventEmitter {
@@ -46,24 +42,24 @@ export class ModbusServer extends EventEmitter {
   constructor(configuration: ModbusRtuServerConfiguration) {
     super();
 
-    log.info('MbServer: Running construcor');
-    log.info(configuration);
+    log.debug('Running construcor');
+    // log.debug(configuration);
 
-    log.debug(`MbServer: Allocating ${numCoils} bytes for coils`);
+    log.debug(`Allocating ${numCoils} bytes for coils`);
     this.coils = Buffer.alloc(numCoils, 0); // coils inputs
 
-    log.debug(`MbServer: Allocating ${numDiscreteInputs} bytes for discrete inputs`);
+    log.debug(`Allocating ${numDiscreteInputs} bytes for discrete inputs`);
     this.discreteInputs = Buffer.alloc(numCoils, 0); // discrete inputs
 
-    log.debug(`MbServer: Allocating ${numHoldingRegisters * 2} bytes for holding registers`);
+    log.debug(`Allocating ${numHoldingRegisters * 2} bytes for holding registers`);
     this.holdingRegisters = Buffer.alloc(numHoldingRegisters * 2, 0); // holding registers
 
-    log.debug(`MbServer: Allocating ${numInputRegisters * 2} bytes for input registers`);
+    log.debug(`Allocating ${numInputRegisters * 2} bytes for input registers`);
     this.inputRegisters = Buffer.alloc(numInputRegisters * 2, 0); // input registers
 
     function castToUInt(x: number) {
       if (x < 0) {
-        console.log(`Casting ${x} to ${0xffff + 1 + x}`);
+        // log.debug(`Casting ${x} to ${0xffff + 1 + x}`);
         return 0xffff + 1 + x;
       }
 
@@ -121,14 +117,14 @@ export class ModbusServer extends EventEmitter {
 
       // eslint-disable-next-line no-inner-declarations
       const oilRecovery = () => {
-        console.log('MHI: Oil recovery started');
+        logger.debug('MHI', 'Oil recovery started');
         this.discreteInputs.writeInt8(1, 8);
 
         setTimeout(() => {
-          console.log('MHI: Oil recovery stopped');
+          logger.debug('MHI', 'Oil recovery stopped');
           this.discreteInputs.writeInt8(0, 8);
           effectOfLiquidBack = effectOfLiquidBack === 0 ? 1 : 0;
-          console.log(`MHI: Setting effect of liquid back to: ${effectOfLiquidBack}`);
+          logger.debug('MHI', `Setting effect of liquid back to: ${effectOfLiquidBack}`);
           this.inputRegisters.writeUInt16LE(effectOfLiquidBack, EFFECT_OF_LIQUID_BACK_PNU * 2);
         }, 15000);
       };
@@ -141,36 +137,36 @@ export class ModbusServer extends EventEmitter {
 
     const vector: ModbusServerVector = {
       getCoil: (addr, _unitID, cb) => {
-        log.debug(`MbServer: Read single coil. Address: ${addr + OFFSET}`);
+        log.debug(`Read single coil. Address: ${addr + OFFSET}`);
 
         if (this.isIllegalAddress('coil', addr)) {
-          log.debug('MbServer: Address out of range');
+          log.debug('Address out of range');
           return cb(ILLEGAL_ADDRESS_ERROR, null);
         }
-        log.debug('MbServer: Value', this.coils.readUInt8(addr));
+        log.debug(`Value: ${this.coils.readUInt8(addr)}`);
 
         return cb(NO_ERROR, this.coils.readUInt8(addr));
       },
       getDiscreteInput: (addr, _unitID, cb) => {
-        log.debug(`MbServer: Read single discrete input. Address ${addr + OFFSET}`);
+        log.debug(`Read single discrete input. Address ${addr + OFFSET}`);
 
         if (this.isIllegalAddress('discreteInput', addr)) {
-          log.debug('MbServer: Address out of range');
+          log.debug('Address out of range');
           return cb(ILLEGAL_ADDRESS_ERROR, null);
         }
         return cb(NO_ERROR, this.discreteInputs.readUInt8(addr));
       },
       getInputRegister: (addr, _unitID, cb) => {
-        log.debug(`MbServer: Read single input register. Address: ${addr + OFFSET}`);
+        log.debug(`Read single input register. Address: ${addr + OFFSET}`);
 
         if (this.isIllegalAddress('inputRegister', addr)) {
-          log.debug('MbServer: Address out of range');
+          log.debug('Address out of range');
           return cb(ILLEGAL_ADDRESS_ERROR, null);
         }
         return cb(null, this.inputRegisters.readUInt16LE(addr * Uint16Array.BYTES_PER_ELEMENT));
       },
       getHoldingRegister: (addr, _unitID, cb) => {
-        log.debug(`MbServer: Read single holding register. Address: ${addr + OFFSET}`);
+        log.debug(`Read single holding register. Address: ${addr + OFFSET}`);
 
         if (this.isIllegalAddress('holdingRegister', addr)) {
           return cb(ILLEGAL_ADDRESS_ERROR, null);
@@ -180,13 +176,13 @@ export class ModbusServer extends EventEmitter {
       },
       getMultipleHoldingRegisters: (startAddr, length, _unitID, cb) => {
         log.debug(
-          `MbServer: Read multiple holding holdingRegisters. Address: ${
+          `Read multiple holding holdingRegisters. Address: ${
             startAddr + OFFSET
           }, count: ${length}`,
         );
 
         if (this.isIllegalAddress('holdingRegister', startAddr, length)) {
-          log.debug('MbServer: Out of range!');
+          log.debug('Out of range!');
           return cb(ILLEGAL_ADDRESS_ERROR, []);
         }
 
@@ -200,13 +196,11 @@ export class ModbusServer extends EventEmitter {
       },
       getMultipleInputRegisters: (startAddr, length, _unitID, cb) => {
         log.debug(
-          `MbServer: Read multiple input registers. Address: ${
-            startAddr + OFFSET
-          }, count: ${length}`,
+          `Read multiple input registers. Address: ${startAddr + OFFSET}, count: ${length}`,
         );
 
         if (this.isIllegalAddress('inputRegister', startAddr, length)) {
-          log.debug('MbServer: ILLEGAL ADDRESS!');
+          log.debug('ILLEGAL ADDRESS!');
           return cb(ILLEGAL_ADDRESS_ERROR, []);
         }
 
@@ -221,12 +215,12 @@ export class ModbusServer extends EventEmitter {
         return cb(NO_ERROR, Array.from(values));
       },
       setCoil: (addr, value, _unitID, cb) => {
-        log.debug(`MbServer: Write single coil. Address: ${addr + OFFSET}, value: ${value}`);
+        log.debug(`Write single coil. Address: ${addr + OFFSET}, value: ${value}`);
 
         this.emit('log', 'info', `Write single coil. Address: ${addr + OFFSET}, value: ${value}`);
 
         if (this.isIllegalAddress('coil', addr)) {
-          log.debug('MbServer: Address out of range');
+          log.debug('Address out of range');
           return cb(ILLEGAL_ADDRESS_ERROR, null);
         }
 
@@ -259,7 +253,7 @@ export class ModbusServer extends EventEmitter {
         );
 
         if (this.isIllegalAddress('holdingRegister', addr)) {
-          log.debug('MbServer: Address out of range');
+          log.debug('Address out of range');
           return cb(ILLEGAL_ADDRESS_ERROR, null);
         }
         this.holdingRegisters.writeUInt16LE(value, addr * Uint16Array.BYTES_PER_ELEMENT);
@@ -295,7 +289,7 @@ export class ModbusServer extends EventEmitter {
         port: configuration.port,
         unitID: configuration.unitId || WILDCARD_UNIT_ID,
         baudRate: configuration.baudRate,
-        interval: 10,
+        interval: 5,
         debug: true,
       };
 
@@ -307,54 +301,55 @@ export class ModbusServer extends EventEmitter {
 
       this.serverSerial = new ServerSerial(vector, options, serialOptions);
 
-      log.info('MbServer: Created serverSerial');
+      log.debug('Created serverSerial');
 
       this.serverSerial.on('open', () => {
-        log.info('MbServer: Opened Serial Server:');
+        log.debug('Opened Serial Server:');
       });
 
       this.serverSerial.on('close', () => {
-        log.info('MbServer: Closed Serial Server:');
+        log.debug('Closed Serial Server:');
       });
 
       this.serverSerial.on('initialized', () => {
-        log.info(
-          `MbServer: Modbus Serial listening ${options.port}, baudrate: ${options.baudRate}, Unit ID: ${options.unitID}`,
+        log.debug(
+          `Listening ${options.port}, baudrate: ${options.baudRate}, Unit ID: ${options.unitID}`,
         );
       });
 
       this.serverSerial.on('error', (err: Error) => {
-        log.error('MbServer: An error occured in Serial Server:');
-        log.error(err);
+        log.debug('An error occured in Serial Server:');
+        console.error(err);
       });
 
       this.serverSerial.on('socketError', (err: Error) => {
-        log.error(err);
+        log.debug('Socket error in Serial Server:');
+        console.error(err);
         this.serverSerial?.close(() => {
-          log.info('MbServer: Serial Server closed');
+          log.debug('Closed Serial Server:');
         });
       });
 
       this.serverSerial.on('log', (type: 'warn' | 'info', message: string) => {
         if (type === 'warn') {
-          log.error(message);
+          console.error(message);
         } else {
           // log.info(message)
         }
       });
     } catch (error) {
-      log.error('MbServer: Error in constructor');
-      log.error(error);
+      log.debug('Error in constructor');
+      console.error(error);
     }
   }
   async stop() {
-    log.info('MbServer: Stopping server');
+    log.debug('Stopping Server:');
     if (!this.serverSerial) {
-      log.info('MbServer: Server not running');
+      log.debug('Server not running');
       return;
     }
     this.serverSerial.close(() => {
-      log.info('MbServer: Server stopped');
+      log.debug('Server stopped');
       return;
     });
   }

@@ -1,234 +1,145 @@
 <template>
-  <ElRow :gutter="20">
-    <ElCol
+  <el-row :gutter="20">
+    <el-col
       :span="24"
       :md="24"
       :lg="9"
       :xl="6"
     >
-      <ElCard
+      <el-card
         header="Modbus Logger"
         class="box-card"
       >
-        <ElForm
+        <el-form
           ref="ruleFormRef"
           label-width="120px"
         >
-          <ElFormItem label="Connection Type">
-            <ElRadioGroup v-model.number="modbusStore.clientConfiguration.connectionType">
-              <ElRadioButton label="0">Modbus RTU</ElRadioButton>
-              <ElRadioButton label="1">Modbus TCP</ElRadioButton>
-            </ElRadioGroup>
-          </ElFormItem>
+          <el-form-item label="Connection Type">
+            <el-radio-group v-model.number="modbusStore.clientConfiguration.connectionType">
+              <el-radio-button label="0">Modbus RTU</el-radio-button>
+              <el-radio-button label="1">Modbus TCP</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
           <template v-if="modbusStore.clientConfiguration.connectionType === CONNECTION_TYPE.TCP">
-            <ElFormItem
-              label="IP Address"
-              prop="ip"
-            >
-              <ElInput
-                v-model="modbusStore.clientConfiguration.tcp.ip"
-                required
-                type="text"
-                placeholder="Input IP address"
-              />
-            </ElFormItem>
-            <ElFormItem label="Port">
-              <ElInput
-                v-model.number="modbusStore.clientConfiguration.tcp.port"
-                type="number"
-                min="1"
-                max="65535"
-              />
-            </ElFormItem>
-            <ElFormItem label="Timeout">
-              <ElInput
-                v-model.number="modbusStore.clientConfiguration.tcp.timeout"
-                type="number"
-                min="1"
-                max="60000"
-              >
-                <template #suffix>ms</template>
-              </ElInput>
-            </ElFormItem>
+            <tcp-config v-model="modbusStore.clientConfiguration.tcp" />
           </template>
           <template v-else>
-            <ElFormItem label="COM port">
-              <ElSelect
-                v-model="modbusStore.clientConfiguration.rtu.port"
-                placeholder="Select port"
-              >
-                <ElOption
-                  v-for="item in modbusStore.comPorts"
-                  :key="item.path"
-                  :label="item.path"
-                  :value="item.path"
-                ></ElOption>
-              </ElSelect>
-            </ElFormItem>
-            <ElFormItem label="Baud rate">
-              <ElSelect
-                v-model.number="modbusStore.clientConfiguration.rtu.baudRate"
-                placeholder="Select baudRate"
-              >
-                <ElOption
-                  v-for="item in modbusStore.baudRateOptions"
-                  :key="item.value"
-                  :label="item.label"
-                  :value="item.value"
-                ></ElOption>
-              </ElSelect>
-            </ElFormItem>
-            <ElFormItem label="Parity">
-              <ElSelect
-                v-model="modbusStore.clientConfiguration.rtu.parity"
-                placeholder="Select parity"
-              >
-                <ElOption
-                  v-for="item in modbusStore.parityOptions"
-                  :key="item.value"
-                  :label="item.label"
-                  :value="item.value"
-                ></ElOption>
-              </ElSelect>
-            </ElFormItem>
-            <ElFormItem label="Data bits">
-              <ElInputNumber
-                v-model.number="modbusStore.clientConfiguration.rtu.dataBits"
-                :min="6"
-                :max="8"
-              />
-            </ElFormItem>
-            <ElFormItem label="Stop bits">
-              <ElInputNumber
-                v-model.number="modbusStore.clientConfiguration.rtu.stopBits"
-                :min="1"
-                :max="2"
-              />
-            </ElFormItem>
-            <ElFormItem label="Timeout">
-              <ElInput
-                v-model.number="modbusStore.clientConfiguration.rtu.timeout"
-                :min="1"
-                :max="60000"
-              >
-                <template #suffix>ms</template>
-              </ElInput>
-            </ElFormItem>
+            <rtu-config v-model="modbusStore.clientConfiguration.rtu" />
           </template>
-          <ElDivider></ElDivider>
-          <ElFormItem label="Unit ID">
-            <ElInputNumber
+          <el-divider></el-divider>
+          <el-form-item label="Unit ID">
+            <el-input-number
               v-model.number="modbusStore.clientConfiguration.common.unitId"
               :min="0"
               :max="254"
             />
-          </ElFormItem>
-          <ElFormItem label="Modbus Function">
-            <ElSelect
+          </el-form-item>
+          <el-form-item label="Modbus Function">
+            <el-select
               v-model="modbusStore.clientConfiguration.common.mbFunction"
               placeholder="Modbus function"
             >
-              <ElOption
+              <el-option
                 v-for="item in mbFunctions"
                 :key="item.id"
                 :label="item.name"
                 :value="item.id"
-              ></ElOption>
-            </ElSelect>
-          </ElFormItem>
-          <ElFormItem
+              ></el-option>
+            </el-select>
+          </el-form-item>
+          <el-form-item
             v-for="parameter in modbusStore.mbOptions"
             :key="parameter.id"
             :label="parameter.label"
           >
-            <ElInputNumber
+            <el-input-number
               v-if="parameter.type === 'number'"
               v-model.number="parameter.value"
               :min="parameter.min"
               :max="parameter.max"
             />
-            <ElInput
+            <el-input
               v-else
               v-model.number="parameter.value"
               :type="parameter.type"
               :min="parameter.min"
               :max="parameter.max"
             />
-          </ElFormItem>
-          <ElFormItem>
-            <ElButton @click="clearTasks">Clear tasks</ElButton>
-            <ElButton
+          </el-form-item>
+          <el-form-item>
+            <el-button @click="clearTasks">Clear tasks</el-button>
+            <el-button
               type="primary"
               @click="addTask"
             >
               Add task
-            </ElButton>
-          </ElFormItem>
-          <ElTable
+            </el-button>
+          </el-form-item>
+          <el-table
             :data="tasks"
             :border="true"
             empty-text="No tasks configured"
           >
-            <ElTableColumn
+            <el-table-column
               prop="unitId"
               label="Unit ID"
               width="100"
             />
-            <ElTableColumn
+            <el-table-column
               prop="mbFunction"
               label="Function"
               width="100"
             />
-            <ElTableColumn
+            <el-table-column
               prop="mbOptions"
               label="Register"
             >
               <template #default="scope">
                 {{ formatMbOptions(scope.row.mbOptions) }}
               </template>
-            </ElTableColumn>
-          </ElTable>
-          <ElDivider></ElDivider>
-          <ElFormItem label="Count">
-            <ElInputNumber
+            </el-table-column>
+          </el-table>
+          <el-divider></el-divider>
+          <el-form-item label="Count">
+            <el-input-number
               v-model.number="requestCount"
               :min="1"
               :max="10000"
             />
-          </ElFormItem>
-          <ElFormItem label="Delay (ms)">
-            <ElInputNumber
+          </el-form-item>
+          <el-form-item label="Delay (ms)">
+            <el-input-number
               v-model.number="requestDelay"
               :min="1"
             />
-          </ElFormItem>
-          <ElFormItem>
-            <ElButton
+          </el-form-item>
+          <el-form-item>
+            <el-button
               type="primary"
               @click="performRequest()"
             >
               Execute
-            </ElButton>
-          </ElFormItem>
-        </ElForm>
-      </ElCard>
-    </ElCol>
-    <ElCol
+            </el-button>
+          </el-form-item>
+        </el-form>
+      </el-card>
+    </el-col>
+    <el-col
       :span="24"
       :md="24"
       :lg="15"
     >
-      <ElCard>
+      <el-card>
         <template #header>
           <div class="card-header">
             <span>Result</span>
-            <ElButton
+            <el-button
               v-if="results.length"
               :size="'small'"
               @click="exportLog"
             >
               Export <el-icon class="el-icon--right"><i-ep-download /></el-icon>
-            </ElButton>
+            </el-button>
           </div>
         </template>
         <el-result
@@ -238,42 +149,42 @@
           :sub-title="loggerError"
         ></el-result>
         <template v-else>
-          <ElDescriptions
+          <el-descriptions
             :column="1"
             border
             class="logger-stats-table"
           >
-            <ElDescriptionsItem label="Progress">
-              <ElProgress :percentage="stats.progress">
+            <el-descriptions-item label="Progress">
+              <el-progress :percentage="stats.progress">
                 <span>{{ stats.requestsDone }} / {{ stats.requestsTotal }}</span>
-              </ElProgress>
-            </ElDescriptionsItem>
-            <ElDescriptionsItem label="Success">
-              <ElProgress
+              </el-progress>
+            </el-descriptions-item>
+            <el-descriptions-item label="Success">
+              <el-progress
                 :percentage="statsSuccessPct"
                 :color="colorGoodProgress"
               >
                 <span>{{ stats.successfulRequests }} / {{ stats.requestsDone }}</span>
-              </ElProgress>
+              </el-progress>
               <!-- ({{ stats.successfulRequests }} out of {{ stats.requestsDone }}) -->
-            </ElDescriptionsItem>
-            <ElDescriptionsItem label="Timeouts">
-              <ElProgress
+            </el-descriptions-item>
+            <el-descriptions-item label="Timeouts">
+              <el-progress
                 :percentage="statsTimedOutPct"
                 :color="colorBadProgress"
               >
                 <span>{{ stats.requestsTimedOut }} / {{ stats.requestsDone }}</span>
-              </ElProgress>
+              </el-progress>
               <!-- ({{ stats.requestsTimedOut }} out of {{ stats.requestsDone }}) -->
-            </ElDescriptionsItem>
-            <ElDescriptionsItem label="Average response">
+            </el-descriptions-item>
+            <el-descriptions-item label="Average response">
               {{ stats.averageResponseTime.toFixed(0) }} ms
-            </ElDescriptionsItem>
-          </ElDescriptions>
-          <ElDivider></ElDivider>
-          <ElAutoResizer>
+            </el-descriptions-item>
+          </el-descriptions>
+          <el-divider></el-divider>
+          <el-auto-resizer>
             <template #default="{width}">
-              <ElTableV2
+              <el-table-v2
                 :columns="columns"
                 :data="results"
                 :width="width"
@@ -281,7 +192,7 @@
                 fixed
               />
             </template>
-          </ElAutoResizer>
+          </el-auto-resizer>
           <!-- <el-table :data="results" height="600" style="width: 100%">
             <el-table-column prop="id" label="ID" width="100" />
             <el-table-column prop="unitId" label="Unit ID" width="100" />
@@ -291,16 +202,17 @@
             <el-table-column prop="executionTime" label="Response" />
           </el-table> -->
         </template>
-      </ElCard>
-    </ElCol>
-  </ElRow>
+      </el-card>
+    </el-col>
+  </el-row>
 </template>
 
 <script lang="tsx" setup>
-import {csv, logger} from '#preload';
-import {CONNECTION_TYPE, mbFunctions, useModbusStore} from '/@/components/useModbus';
+import {logger} from '#preload';
+import useCSV from '/@/components/useCSV';
+import {CONNECTION_TYPE, mbFunctions, useModbusStore} from '/@/stores/useModbus';
 
-import * as Papa from 'papaparse';
+const {saveCSV} = useCSV();
 // import useToast from '/@/components/useToast'
 
 const modbusStore = useModbusStore();
@@ -435,10 +347,7 @@ function addTask() {
     },
   };
 
-  console.log(task);
-
   tasks.value.push(task);
-  console.log(tasks.value);
 }
 
 function clearTasks() {
@@ -462,23 +371,20 @@ function clearTasks() {
 // });
 
 function exportLog() {
-  console.log('Trying to save file');
-  const text = Papa.unparse(
-    results.value.map(i => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = (i.result || []).map((j: any) => j.value).join(', ');
-      return {
-        ...i,
-        result,
-      };
-    }),
-  );
+  const formattedList = results.value.map(i => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = (i.result || []).map((j: any) => j.value).join(', ');
+    return {
+      ...i,
+      result,
+    };
+  });
 
-  csv.save(text, 'Modbus Logger');
+  saveCSV(formattedList, 'Modbus Logger');
 }
 
 logger.onLog((_event, logs: LoggerLogMessage[]) => {
-  console.log(logs);
+  // console.log(logs);
   logs.forEach(message => {
     // console.log(message.request)
     stats.value = message.stats;
@@ -515,7 +421,7 @@ const performRequest = async () => {
       count: requestCount.value,
       delay: requestDelay.value,
     };
-    console.log('Starting logger');
+    // console.log('Starting logger');
     logger.startTcp(config);
   } else if (modbusStore.clientConfiguration.connectionType === CONNECTION_TYPE.RTU) {
     // console.log('Modbus RTU')
@@ -538,17 +444,6 @@ const performRequest = async () => {
     }
   }
 };
-
-// function downloadLog() {
-//   const data = results.value
-//   const csv = Papa.unparse(data);
-//   console.log(csv)
-// }
-
-onMounted(async () => {
-  console.log('Component is mounted!');
-  // console.log(ipcRenderer)
-});
 
 function formatMbOptions(mbOptions: GenericObject[]) {
   if ('addr' in mbOptions && 'count' in mbOptions) {

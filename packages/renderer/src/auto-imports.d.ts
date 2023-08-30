@@ -6,6 +6,11 @@
 export {}
 declare global {
   const EffectScope: typeof import('vue')['EffectScope']
+  const IconEpCpu: typeof import('~icons/ep/cpu')['default']
+  const IconEpDataAnalysis: typeof import('~icons/ep/data-analysis')['default']
+  const IconEpDocument: typeof import('~icons/ep/document')['default']
+  const IconEpMouse: typeof import('~icons/ep/mouse')['default']
+  const IconEpSearch: typeof import('~icons/ep/search')['default']
   const computed: typeof import('vue')['computed']
   const createApp: typeof import('vue')['createApp']
   const customRef: typeof import('vue')['customRef']
@@ -61,5 +66,5 @@ declare global {
 // for type re-export
 declare global {
   // @ts-ignore
-  export type { Component, ComponentPublicInstance, ComputedRef, InjectionKey, PropType, Ref, VNode } from 'vue'
+  export type { Component, ComponentPublicInstance, ComputedRef, InjectionKey, PropType, Ref, VNode, WritableComputedRef } from 'vue'
 }

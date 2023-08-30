@@ -1,8 +1,10 @@
 import ModbusRTU from 'modbus-serial';
 import {EventEmitter} from 'events';
 import {ERROR_CODE_UNKNOWN, MODBUS_TCP_CONNECT_TIMEOUT} from './modbusCommon';
-import {sleep} from './utilities';
+import {sleep, logger} from './utilities';
 import {modbusRequest} from './modbusRequest';
+
+const log = logger.createLogger('Modbus Logger');
 
 class ModbusLogger extends EventEmitter {
   requestsTotal!: number;
@@ -12,14 +14,22 @@ class ModbusLogger extends EventEmitter {
   countsDone!: number;
   progress!: number;
   successfulRequests!: number;
+  client: ModbusRTU;
 
   constructor() {
     super();
+    this.client = new ModbusRTU();
     this.emit('log', 'Logger initiated!');
-    this.reset();
+    this.resetStats();
   }
 
-  reset() {
+  close() {
+    if (this.client.isOpen) {
+      this.client.close(() => null);
+    }
+  }
+
+  protected resetStats() {
     this.requestsTotal = 0;
     this.requestsDone = 0;
     this.requestsTimedOut = 0;
@@ -29,10 +39,103 @@ class ModbusLogger extends EventEmitter {
     this.successfulRequests = 0;
   }
 
-  log(type: LogType, message: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  protected parseError(err: any) {
+    if (!err.message && !(err instanceof Error)) {
+      return {errorCode: ERROR_CODE_UNKNOWN, errorText: 'Unknown error'};
+    }
+
+    return {errorCode: ERROR_CODE_UNKNOWN, errorText: err.message};
+  }
+
+  protected async handleTasks(count: number, tasks: ModbusTask[], timeout: number, delay: number) {
+    while (this.countsDone < count) {
+      for (const task of tasks) {
+        const timestamp = new Date();
+
+        const {executionTime, result, errorCode, errorText} = await this.performRequest(
+          task,
+          timeout,
+        );
+
+        this.requestsDone++;
+
+        this.reportProgress();
+
+        this.reportResult(task, executionTime, result, errorCode, errorText, timestamp);
+
+        await sleep(delay);
+      }
+      this.countsDone++;
+    }
+  }
+
+  protected async performRequest(task: ModbusTask, timeout: number) {
+    let result = null;
+    let errorText = '';
+    let errorCode = 0;
+    let executionTime = 0;
+
+    try {
+      const requestResult = await modbusRequest(
+        this.client,
+        task.unitId,
+        timeout,
+        task.mbFunction,
+        task.mbOptions,
+      );
+
+      ({executionTime, errorCode, errorText, result} = requestResult);
+
+      if (errorCode === 408) {
+        this.requestsTimedOut++;
+      } else if (!errorCode) {
+        this.successfulRequests++;
+        this.totalResponseTime += executionTime;
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (err: any) {
+      // log.info(err)
+      ({errorCode, errorText} = this.parseError(err));
+    }
+    return {executionTime, result, errorCode, errorText};
+  }
+
+  protected reportProgress() {
+    this.progress = Math.round((this.requestsDone / this.requestsTotal) * 100);
+  }
+
+  protected reportResult(
+    task: ModbusTask,
+    executionTime: number,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    result: any,
+    errorCode: number,
+    errorText: string,
+    timestamp: Date,
+  ) {
     this.emit('log', {
-      type,
-      message,
+      request: {
+        id: this.requestsDone,
+        unitId: task.unitId,
+        mbFunction: task.mbFunction,
+        mbAddr: task.mbOptions.addr,
+        executionTime,
+        result,
+        errorCode,
+        errorText,
+        timestamp,
+      },
+      stats: {
+        successfulRequests: this.successfulRequests,
+        averageResponseTime: this.successfulRequests
+          ? this.totalResponseTime / this.successfulRequests
+          : 0,
+        requestsTimedOut: this.requestsTimedOut,
+        requestsDone: this.requestsDone,
+        requestsTotal: this.requestsTotal,
+        progress: this.progress,
+      },
     });
   }
 }
@@ -45,92 +148,23 @@ export class ModbusLoggerRTU extends ModbusLogger {
   async request(configuration: RtuLoggerConfiguration) {
     const {port, timeout, baudRate, parity, dataBits, stopBits, tasks, count, delay} =
       configuration;
-    this.reset();
+
+    this.resetStats();
     this.requestsTotal = tasks.length * count;
 
-    const client = new ModbusRTU();
     try {
-      await client.connectRTUBuffered(port, {baudRate, parity, dataBits, stopBits});
-      // console.log('Modbus RTU port opened!')
+      await this.client.connectRTUBuffered(port, {baudRate, parity, dataBits, stopBits});
+      log.info(`Port ${port} opened`);
     } catch (error) {
-      console.log('Error when opening RTU port');
-      client.close(() => null); // TODO: Comment this to keep connections open
-      // console.log('Closed port')
+      log.error(`Failed to open port ${port}`);
+      this.close();
+      // log.info('Closed port')
       throw error;
     }
 
-    while (this.countsDone < count) {
-      for (const task of tasks) {
-        const timestamp = new Date();
-        let result = null;
-        let errorText = '';
-        let errorCode = 0;
-        let executionTime = 0;
+    await this.handleTasks(count, tasks, timeout, delay);
 
-        try {
-          // console.log(client.setID)
-          const requestResult = await modbusRequest(
-            client,
-            task.unitId,
-            timeout,
-            task.mbFunction,
-            task.mbOptions,
-          );
-          executionTime = requestResult.executionTime;
-          errorCode = requestResult.errorCode;
-          errorText = requestResult.errorText;
-          result = requestResult.result;
-
-          // ({ executionTime, result } = await modbusRequest(client, task.mbFunction, task.mbOptions))
-          if (errorCode === 408) {
-            this.requestsTimedOut++;
-          } else if (!errorCode) {
-            this.successfulRequests++;
-            this.totalResponseTime += executionTime;
-          }
-        } catch (err: unknown) {
-          // console.log(err)
-          if (!(err instanceof Error)) {
-            errorCode = ERROR_CODE_UNKNOWN;
-            errorText = 'Unknown error';
-          } else {
-            errorCode = ERROR_CODE_UNKNOWN;
-            errorText = err.message;
-          }
-        }
-
-        this.requestsDone++;
-
-        this.progress = Math.round((this.requestsDone / this.requestsTotal) * 100);
-
-        this.emit('log', {
-          request: {
-            id: this.requestsDone,
-            unitId: task.unitId,
-            mbFunction: task.mbFunction,
-            mbAddr: task.mbOptions.addr,
-            executionTime,
-            result,
-            errorCode,
-            errorText,
-            timestamp,
-          },
-          stats: {
-            successfulRequests: this.successfulRequests,
-            averageResponseTime: this.successfulRequests
-              ? this.totalResponseTime / this.successfulRequests
-              : 0,
-            requestsTimedOut: this.requestsTimedOut,
-            requestsDone: this.requestsDone,
-            requestsTotal: this.requestsTotal,
-            progress: this.progress,
-          },
-        });
-        await sleep(delay);
-      }
-      this.countsDone++;
-    }
-    client.close(() => null); // TODO: Comment this to keep connections open
+    this.close();
   }
 }
 
@@ -141,95 +175,22 @@ export class ModbusLoggerTCP extends ModbusLogger {
 
   async request(configuration: TcpLoggerConfiguration) {
     const {ip, port, timeout, tasks, count, delay} = configuration;
-    this.countsDone = 0;
-    this.requestsDone = 0;
-    this.successfulRequests = 0;
-    this.requestsTimedOut = 0;
-    this.totalResponseTime = 0;
-    this.progress = 0;
+
+    this.resetStats();
     this.requestsTotal = tasks.length * count;
 
-    const client = new ModbusRTU();
     try {
-      client.setTimeout(MODBUS_TCP_CONNECT_TIMEOUT);
-      await client.connectTCP(ip, {port});
-      // console.log('Modbus TCP connected!')
+      this.client.setTimeout(MODBUS_TCP_CONNECT_TIMEOUT);
+      await this.client.connectTCP(ip, {port});
+      log.debug(`Connected to ${ip}:${port}`);
     } catch (error) {
-      if (client.isOpen) client.close(() => null); // TODO: Comment this to keep connections open
+      log.error(`Connection failed to ${ip}:${port}`);
+      this.close();
       throw error;
     }
 
-    while (this.countsDone < count) {
-      for (const task of tasks) {
-        const timestamp = new Date();
-        let result = null;
-        let errorText = '';
-        let errorCode = 0;
-        let executionTime = 0;
+    await this.handleTasks(count, tasks, timeout, delay);
 
-        try {
-          const requestResult = await modbusRequest(
-            client,
-            task.unitId,
-            timeout,
-            task.mbFunction,
-            task.mbOptions,
-          );
-          executionTime = requestResult.executionTime;
-          errorCode = requestResult.errorCode;
-          errorText = requestResult.errorText;
-          result = requestResult.result;
-
-          // ({ executionTime, result } = await modbusRequest(client, task.mbFunction, task.mbOptions))
-          if (errorCode === 408) {
-            this.requestsTimedOut++;
-          } else if (!errorCode) {
-            this.successfulRequests++;
-            this.totalResponseTime += executionTime;
-          }
-        } catch (err: unknown) {
-          // console.log(err)
-          if (!(err instanceof Error)) {
-            errorCode = ERROR_CODE_UNKNOWN;
-            errorText = 'Unknown error';
-          } else {
-            errorCode = ERROR_CODE_UNKNOWN;
-            errorText = err.message;
-          }
-        }
-
-        this.requestsDone++;
-
-        this.progress = Math.round((this.requestsDone / this.requestsTotal) * 100);
-
-        this.emit('log', {
-          request: {
-            id: this.requestsDone,
-            unitId: task.unitId,
-            mbFunction: task.mbFunction,
-            mbAddr: task.mbOptions.addr,
-            executionTime,
-            result,
-            errorCode,
-            errorText,
-            timestamp,
-          },
-          stats: {
-            successfulRequests: this.successfulRequests,
-            averageResponseTime: this.successfulRequests
-              ? this.totalResponseTime / this.successfulRequests
-              : 0,
-            requestsTimedOut: this.requestsTimedOut,
-            requestsDone: this.requestsDone,
-            requestsTotal: this.requestsTotal,
-            progress: this.progress,
-          },
-        });
-
-        await sleep(delay);
-      }
-      this.countsDone++;
-    }
-    if (client.isOpen) client.close(() => null); // TODO: Comment this to keep connections open
+    this.close();
   }
 }

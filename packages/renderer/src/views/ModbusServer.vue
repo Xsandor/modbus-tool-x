@@ -12,70 +12,38 @@
           label-width="120px"
         >
           <el-form-item label="Connection Type">
-            <el-radio-group v-model="modbusStore.serverConfiguration.connectionType">
+            <el-radio-group v-model.number="modbusStore.serverConfiguration.connectionType">
               <el-radio-button label="0">Modbus RTU</el-radio-button>
               <el-radio-button
                 label="1"
-                :disabled="true"
                 title="Not supported yet"
+                disabled
                 >Modbus TCP</el-radio-button
               >
             </el-radio-group>
           </el-form-item>
-
-          <el-form-item label="COM port">
-            <el-select
-              v-model="modbusStore.serverConfiguration.rtu.port"
-              placeholder="Select port"
-            >
-              <el-option
-                v-for="item in modbusStore.comPorts"
-                :key="item.path"
-                :label="item.path"
-                :value="item.path"
-              ></el-option>
-            </el-select>
-          </el-form-item>
-          <el-form-item label="Baud rate">
-            <el-select
-              v-model.number="modbusStore.serverConfiguration.rtu.baudRate"
-              placeholder="Select baudRate"
-            >
-              <el-option
-                v-for="item in modbusStore.baudRateOptions"
-                :key="item.value"
-                :label="item.label"
-                :value="item.value"
-              ></el-option>
-            </el-select>
-          </el-form-item>
-          <el-form-item label="Parity">
-            <el-select
-              v-model="modbusStore.serverConfiguration.rtu.parity"
-              placeholder="Select parity"
-            >
-              <el-option
-                v-for="item in modbusStore.parityOptions"
-                :key="item.value"
-                :label="item.label"
-                :value="item.value"
-              ></el-option>
-            </el-select>
-          </el-form-item>
-          <el-form-item label="Data bits">
+          <template v-if="modbusStore.serverConfiguration.connectionType === CONNECTION_TYPE.TCP">
+            <el-form-item label="Port">
+              <el-input
+                v-model.number="modbusStore.serverConfiguration.tcp.port"
+                type="number"
+                min="1"
+                max="65535"
+              />
+            </el-form-item>
+          </template>
+          <template v-else>
+            <rtu-config v-model="modbusStore.serverConfiguration.rtu" />
+          </template>
+          <el-form-item
+            label="Unit ID"
+            title="255 = Listens to all IDs"
+          >
             <el-input-number
-              v-model.number="modbusStore.serverConfiguration.rtu.dataBits"
-              type="number"
-              :min="6"
-              :max="8"
-            />
-          </el-form-item>
-          <el-form-item label="Stop bits">
-            <el-input-number
-              v-model.number="modbusStore.serverConfiguration.rtu.stopBits"
+              v-model.number="modbusStore.serverConfiguration.common.unitId"
               type="number"
               :min="1"
-              :max="2"
+              :max="255"
             />
           </el-form-item>
           <el-form-item>
@@ -85,7 +53,7 @@
               >Stop Server</el-button
             >
             <el-button
-              type="primary"
+              :type="started ? 'primary' : 'default'"
               :disabled="started"
               @click="startServer"
               >Start Server</el-button
@@ -171,20 +139,7 @@
       :lg="12"
       :xl="12"
     >
-      <el-card header="Logs">
-        <div
-          v-if="logs.length"
-          class="log-container"
-        >
-          <span
-            v-for="(log, index) in logs"
-            :key="'log-' + index"
-            :class="log.type"
-            >{{ log.message }}</span
-          >
-        </div>
-        <el-text v-else>No log entries yet..</el-text>
-      </el-card>
+      <log-container :log="logs" />
     </el-col>
   </el-row>
 </template>
@@ -192,7 +147,7 @@
 <!-- eslint-disable no-undef -->
 <script lang="ts" setup>
 import {server} from '#preload';
-import {useModbusStore} from '/@/components/useModbus';
+import {useModbusStore, CONNECTION_TYPE} from '/@/stores/useModbus';
 
 const modbusStore = useModbusStore();
 
@@ -226,7 +181,7 @@ const dataType = ref('holding');
 const dataRegister = ref(1);
 const dataCount = ref(100);
 
-const logs: Ref<{type: string; message: string}[]> = ref([]);
+const logs: Ref<ScanLogItem[]> = ref([]);
 const data = ref([]);
 
 async function getData() {
@@ -255,7 +210,7 @@ async function getData() {
 server.onLog((_event, type: string, log: string) => {
   logs.value.push({
     type,
-    message: log,
+    text: log,
   });
 });
 
@@ -264,24 +219,4 @@ watch([dataType, dataRegister, dataCount], () => {
 });
 </script>
 
-<style scoped lang="scss">
-.log-container {
-  max-height: 200px;
-  overflow-y: auto;
-
-  span {
-    display: block;
-    font-size: 13px;
-    color: var(--el-text-color-regular);
-    line-height: 25px;
-
-    // &.info {
-    //   // color: grey;
-    // }
-
-    &.success {
-      color: green;
-    }
-  }
-}
-</style>
+<style scoped lang="scss"></style>

@@ -3,7 +3,7 @@
  * @module preload
  */
 
-import { ipcRenderer } from 'electron';
+import {ipcRenderer} from 'electron';
 
 export const csv = {
   save: async (data: any, source: string) => {
@@ -86,6 +86,36 @@ export const scanner = {
   },
 };
 
+export const registerScanner = {
+  start: async (serialPortConfiguration: SerialPortConfiguration, unitId: number) => {
+    return ipcRenderer.invoke('RegisterScanner:start', serialPortConfiguration, unitId);
+  },
+  onProgress: (callback: (event: Electron.IpcRendererEvent, ...args: any[]) => void) => {
+    ipcRenderer.on('RegisterScanner:progress', callback);
+  },
+  onFoundRegisters: (callback: (event: Electron.IpcRendererEvent, ...args: any[]) => void) => {
+    ipcRenderer.on('RegisterScanner:foundRegisters', callback);
+  },
+};
+
+export const danfossEkc = {
+  initiate: async (serialPortConfiguration: SerialPortConfiguration, unitId: number) => {
+    return ipcRenderer.invoke('EKC:initiate', serialPortConfiguration, unitId);
+  },
+  onStatus: (callback: (event: Electron.IpcRendererEvent, ...args: any[]) => void) => {
+    ipcRenderer.on('EKC:status', callback);
+  },
+  onParameterData: (callback: (event: Electron.IpcRendererEvent, ...args: any[]) => void) => {
+    ipcRenderer.on('EKC:parameterData', callback);
+  },
+  setActiveGroup: async (groupId: number) => {
+    return ipcRenderer.invoke('EKC:setActiveGroup', groupId);
+  },
+  writeParameter: async (pnu: number, value: number) => {
+    return ipcRenderer.invoke('EKC:writeParameter', pnu, value);
+  },
+};
+
 export const network = {
   getInfo: async () => {
     ipcRenderer.send('getNetworkInfo');
@@ -115,11 +145,11 @@ export const serial = {
 
 export const store = {
   get: (key: string) => {
-    console.log('Someone is getting the value for key:', key, ' in from the electron store');
+    // console.log('Someone is getting the value for key:', key, ' in from the electron store');
     return ipcRenderer.sendSync('electron-store-get', key);
   },
   set: (key: string, val: any) => {
-    console.log('Someone is setting the value for key:', key, ' in the electron store to:', val);
+    // console.log('Someone is setting the value for key:', key, ' in the electron store to:', val);
     ipcRenderer.send('electron-store-set', key, val);
   },
 };

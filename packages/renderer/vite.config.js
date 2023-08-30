@@ -62,7 +62,8 @@ const config = {
 
         // Auto import icon components
         IconsResolver({
-          prefix: 'Icon',
+          prefix: 'icon',
+          enabledCollections: ['ep'],
         }),
       ],
 

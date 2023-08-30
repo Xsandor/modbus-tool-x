@@ -21,103 +21,10 @@
             </el-radio-group>
           </el-form-item>
           <template v-if="modbusStore.scannerConfiguration.connectionType == CONNECTION_TYPE.RTU">
-            <el-form-item label="COM port">
-              <el-select
-                v-model="modbusStore.scannerConfiguration.rtu.port"
-                placeholder="Select port"
-              >
-                <el-option
-                  v-for="item in modbusStore.comPorts"
-                  :key="item.path"
-                  :label="item.path"
-                  :value="item.path"
-                ></el-option>
-              </el-select>
-            </el-form-item>
-            <el-form-item label="Baud rate">
-              <el-select
-                v-model.number="modbusStore.scannerConfiguration.rtu.baudRate"
-                placeholder="Select baudRate"
-              >
-                <el-option
-                  v-for="item in modbusStore.baudRateOptions"
-                  :key="item.value"
-                  :label="item.label"
-                  :value="item.value"
-                ></el-option>
-              </el-select>
-            </el-form-item>
-            <el-form-item label="Parity">
-              <el-select
-                v-model="modbusStore.scannerConfiguration.rtu.parity"
-                placeholder="Select parity"
-              >
-                <el-option
-                  v-for="item in modbusStore.parityOptions"
-                  :key="item.value"
-                  :label="item.label"
-                  :value="item.value"
-                ></el-option>
-              </el-select>
-            </el-form-item>
-            <el-form-item label="Data bits">
-              <el-input
-                v-model.number="modbusStore.scannerConfiguration.rtu.dataBits"
-                type="number"
-                min="6"
-                max="8"
-              />
-            </el-form-item>
-            <el-form-item label="Stop bits">
-              <el-input
-                v-model.number="modbusStore.scannerConfiguration.rtu.stopBits"
-                type="number"
-                min="1"
-                max="2"
-              />
-            </el-form-item>
-            <el-form-item label="Timeout">
-              <el-input
-                v-model.number="modbusStore.scannerConfiguration.rtu.timeout"
-                type="number"
-                min="1"
-                max="10000"
-              >
-                <template #suffix>ms</template>
-              </el-input>
-            </el-form-item>
+            <rtu-config v-model="modbusStore.scannerConfiguration.rtu" />
           </template>
           <template v-else>
-            <el-form-item label="Start IP Address">
-              <el-input
-                v-model="modbusStore.scannerConfiguration.tcp.startIp"
-                type="text"
-              />
-            </el-form-item>
-            <el-form-item label="End IP Address">
-              <el-input
-                v-model="modbusStore.scannerConfiguration.tcp.endIp"
-                type="text"
-              />
-            </el-form-item>
-            <el-form-item label="Port">
-              <el-input
-                v-model.number="modbusStore.scannerConfiguration.tcp.port"
-                type="number"
-                min="1"
-                max="65535"
-              />
-            </el-form-item>
-            <el-form-item label="Timeout">
-              <el-input
-                v-model.number="modbusStore.scannerConfiguration.tcp.timeout"
-                type="number"
-                min="1"
-                max="10000"
-              >
-                <template #suffix>ms</template>
-              </el-input>
-            </el-form-item>
+            <tcp-config v-model="modbusStore.scannerConfiguration.tcp" />
           </template>
           <el-form-item label="Delay">
             <el-input
@@ -173,13 +80,13 @@
           <template #header>
             <div class="card-header">
               <span>{{ scanState }}</span>
-              <ElButton
+              <el-button
                 v-if="scanList.length"
                 :size="'small'"
                 @click="exportLog"
               >
                 Export <el-icon class="el-icon--right"><i-ep-download /></el-icon>
-              </ElButton>
+              </el-button>
             </div>
           </template>
           <el-result
@@ -189,7 +96,10 @@
             :sub-title="scannerError"
           ></el-result>
           <el-collapse v-model="openSections">
-            <el-collapse-item name="1">
+            <el-collapse-item
+              name="1"
+              :disabled="!onlineItems.length"
+            >
               <template #title
                 >Online nodes
                 <el-tag
@@ -202,7 +112,10 @@
               >
               <GridList :list="onlineItems" />
             </el-collapse-item>
-            <el-collapse-item name="2">
+            <el-collapse-item
+              name="2"
+              :disabled="!offlineItems.length"
+            >
               <template #title
                 >Offline nodes
                 <el-tag
@@ -215,7 +128,10 @@
               >
               <GridList :list="offlineItems" />
             </el-collapse-item>
-            <el-collapse-item name="3">
+            <el-collapse-item
+              name="3"
+              :disabled="!unknownItems.length"
+            >
               <template #title
                 >Waiting
                 <el-tag
@@ -230,20 +146,7 @@
             </el-collapse-item>
           </el-collapse>
         </el-card>
-        <el-card header="Log">
-          <div
-            v-if="resultLog.length"
-            class="log-container"
-          >
-            <span
-              v-for="(logRow, index) in resultLog"
-              :key="'result-' + index"
-              :class="logRow.type"
-              >{{ logRow.message }}</span
-            >
-          </div>
-          <el-text v-else>No log entries yet..</el-text>
-        </el-card>
+        <log-container :log="resultLog" />
       </el-space>
     </el-col>
   </el-row>
@@ -251,10 +154,11 @@
 
 <!-- eslint-disable no-undef -->
 <script lang="ts" setup>
-import {csv, scanner} from '#preload';
-import {CONNECTION_TYPE, useModbusStore} from '/@/components/useModbus';
-import * as Papa from 'papaparse';
+import {scanner} from '#preload';
+import useCSV from '/@/components/useCSV';
+import {CONNECTION_TYPE, useModbusStore} from '/@/stores/useModbus';
 
+const {saveCSV} = useCSV();
 const modbusStore = useModbusStore();
 
 const resultLog: Ref<ScanLogItem[]> = ref([]);
@@ -311,23 +215,16 @@ const openSections = ref(['1']);
 const scannerError: Ref<string> = ref('');
 
 function exportLog() {
-  console.log('Trying to save file');
-  const text = Papa.unparse(scanList.value);
-
+  let filename = 'Modbus Scanner';
   if (modbusStore.scannerConfiguration.connectionType == CONNECTION_TYPE.RTU) {
-    csv.save(
-      text,
-      `Modbus Scanner RTU ${modbusStore.scannerConfiguration.rtu.port} ${
-        modbusStore.scannerConfiguration.rtu.baudRate
-      } ${
-        modbusStore.scannerConfiguration.rtu.dataBits
-      }${modbusStore.scannerConfiguration.rtu.parity[0].toUpperCase()}${
-        modbusStore.scannerConfiguration.rtu.stopBits
-      }`,
-    );
+    const {port, baudRate, dataBits, parity, stopBits} = modbusStore.scannerConfiguration.rtu;
+
+    filename += ` RTU ${port} ${baudRate} ${dataBits}${parity[0].toUpperCase()}${stopBits}`;
   } else {
-    csv.save(text, 'Modbus Scanner TCP');
+    filename += ' TCP';
   }
+
+  saveCSV(scanList.value, filename);
 }
 
 function clearScanList() {
@@ -358,7 +255,9 @@ scanner.onStatus((_event, updatedScanList) => {
 });
 
 scanner.onLog((_event, messages) => {
+  console.log('Got log!');
   appendToLog(messages);
+  console.log(resultLog.value);
 });
 
 scanner.onProgress((_event, [progress, found]) => {
@@ -372,7 +271,7 @@ scanner.onProgress((_event, [progress, found]) => {
 
 const startScan = async () => {
   clearScanList();
-  appendToLog([{type: 'info', message: 'Starting scanner'}]);
+  appendToLog([{type: 'info', text: 'Starting scanner'}]);
 
   if (modbusStore.scannerConfiguration.connectionType == CONNECTION_TYPE.RTU) {
     const config = {
@@ -414,24 +313,4 @@ onMounted(() => {
 });
 </script>
 
-<style scoped lang="scss">
-.log-container {
-  max-height: 200px;
-  overflow-y: auto;
-
-  span {
-    display: block;
-    font-size: 13px;
-    color: var(--el-text-color-regular);
-    line-height: 25px;
-
-    // &.info {
-    //   // color: grey;
-    // }
-
-    &.success {
-      color: green;
-    }
-  }
-}
-</style>
+<style scoped lang="scss"></style>

@@ -13,7 +13,7 @@ export default async function useComPorts() {
 
   comPorts = await serial.getComPorts();
   comPorts = comPorts.sort(sortComPort);
-  console.log(comPorts);
+  // console.log(comPorts);
 
   return {
     comPorts,

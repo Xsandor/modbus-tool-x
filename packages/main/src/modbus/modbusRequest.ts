@@ -1,7 +1,8 @@
 import ModbusRTU from 'modbus-serial';
-import {uint16ToInt16, int16ToUint16} from './utilities';
+import {uint16ToInt16, int16ToUint16, logger} from './utilities';
 
 import {
+  DEVICE_ID_CODE,
   ERROR_CODE_UNKNOWN,
   MB_FUNCTION,
   MODBUS_TCP_CONNECT_TIMEOUT,
@@ -11,9 +12,60 @@ import {
   DANFOSS_MCX_APP_PNU,
   DANFOSS_MODEL_FILE_NUMBER,
   DANFOSS_MODEL_REF_TYPE,
+  DANFOSS_READ_GROUP_MAX_FILE_NUMBER,
+  DANFOSS_READ_GROUP_REF_TYPE,
   DANFOSS_VERSION_PNU,
+  parseDanfossExceptionStatus,
+  parseDanfossGroup,
+  parseDanfossParameter,
   parseDanfossVersion,
 } from './danfoss';
+
+const log = logger.createLogger('Modbus Request');
+
+function parseRegisters(startAddr: number, registers: number[]) {
+  const length = registers.length;
+
+  return registers.map((item, index, list) => {
+    const int16 = uint16ToInt16(item);
+    let int32 = NaN;
+    let uint32 = NaN;
+    let int32_word_swapped = NaN;
+    let uint32_word_swapped = NaN;
+    let float32 = NaN;
+    let float32_word_swapped = NaN;
+    // if there is at least one more item in the list, combine the current and next item to both a signed and unsigned 32 bit integer
+    if (index < length - 1) {
+      const nextItem = list[index + 1];
+      int32 = (item << 16) | nextItem;
+      uint32 = int32 >>> 0;
+      int32_word_swapped = (nextItem << 16) | item;
+      uint32_word_swapped = int32_word_swapped >>> 0;
+
+      // Create a DataView to interpret the combined integer as Float32
+      const buffer = new ArrayBuffer(4);
+      const view = new DataView(buffer);
+      view.setInt32(0, int32);
+
+      // Get the Float32 value
+      float32 = view.getFloat32(0);
+      view.setInt32(0, int32_word_swapped);
+      float32_word_swapped = view.getFloat32(0);
+    }
+
+    return {
+      addr: startAddr + index,
+      value: int16,
+      uint16: item,
+      int32,
+      uint32,
+      int32_word_swapped,
+      uint32_word_swapped,
+      float32,
+      float32_word_swapped,
+    };
+  });
+}
 
 export async function modbusRequest(
   client: ModbusRTU,
@@ -55,55 +107,13 @@ export async function modbusRequest(
         addr = parseInt(mbOptions.addr);
         count = parseInt(mbOptions.count);
         result = await client.readHoldingRegisters(addr + REGISTER_OFFSET, count);
-        // eslint-disable-next-line no-case-declarations
-        const length = result.data.length;
-        result = result.data.map((item, index, list) => {
-          const int16 = uint16ToInt16(item);
-          let int32 = NaN;
-          let uint32 = NaN;
-          let int32_word_swapped = NaN;
-          let uint32_word_swapped = NaN;
-          let float32 = NaN;
-          let float32_word_swapped = NaN;
-          // if there is at least one more item in the list, combine the current and next item to both a signed and unsigned 32 bit integer
-          if (index < length - 1) {
-            const nextItem = list[index + 1];
-            int32 = (item << 16) | nextItem;
-            uint32 = int32 >>> 0;
-            int32_word_swapped = (nextItem << 16) | item;
-            uint32_word_swapped = int32_word_swapped >>> 0;
-
-            // Create a DataView to interpret the combined integer as Float32
-            const buffer = new ArrayBuffer(4);
-            const view = new DataView(buffer);
-            view.setInt32(0, int32);
-
-            // Get the Float32 value
-            float32 = view.getFloat32(0);
-            view.setInt32(0, int32_word_swapped);
-            float32_word_swapped = view.getFloat32(0);
-          }
-
-          return {
-            addr: addr + index,
-            value: int16,
-            uint16: item,
-            int32,
-            uint32,
-            int32_word_swapped,
-            uint32_word_swapped,
-            float32,
-            float32_word_swapped,
-          };
-        });
+        result = parseRegisters(addr, result.data);
         break;
       case MB_FUNCTION.READ_INPUT_REGISTERS:
         addr = parseInt(mbOptions.addr);
         count = parseInt(mbOptions.count);
         result = await client.readInputRegisters(addr + REGISTER_OFFSET, count);
-        result = result.data.map((item, index) => {
-          return {addr: addr + index, value: uint16ToInt16(item)};
-        });
+        result = parseRegisters(addr, result.data);
         break;
       case MB_FUNCTION.WRITE_SINGLE_COIL:
         addr = parseInt(mbOptions.addr);
@@ -123,7 +133,7 @@ export async function modbusRequest(
           result = await client.writeCoils(addr + REGISTER_OFFSET, values);
 
           if (result.length !== values.length) {
-            console.log('Write coils result did not match request length!');
+            log.error('Write coils result did not match request length!');
             throw new Error('Write failed');
           }
 
@@ -149,11 +159,10 @@ export async function modbusRequest(
         {
           addr = parseInt(mbOptions.addr);
           const values: number[] = mbOptions.values.map(int16ToUint16);
-          // TODO: Check if values are an array of numbers
           result = await client.writeRegisters(addr + REGISTER_OFFSET, values);
 
           if (result.length !== values.length) {
-            console.log('Write registers result did not match request length!');
+            log.error('Write registers result did not match request length!');
             throw new Error('Write failed');
           }
 
@@ -162,16 +171,79 @@ export async function modbusRequest(
           });
         }
         break;
+      case MB_FUNCTION.READ_FILE:
+        result = await client.readFileRecords(
+          mbOptions.fileNumber,
+          mbOptions.recordNumber,
+          mbOptions.recordLength,
+          mbOptions.refType,
+        );
+
+        log.debug(result);
+
+        if (mbOptions.refType === DANFOSS_READ_GROUP_REF_TYPE) {
+          const buffer = result.data as Buffer;
+          if (mbOptions.fileNumber <= DANFOSS_READ_GROUP_MAX_FILE_NUMBER) {
+            // This is a read group request
+            const group = parseDanfossGroup(buffer);
+
+            // set result to an array of the keys and values of the group
+            result = {json: {group}};
+          } else {
+            // This is a read parameter request
+            const parameter = parseDanfossParameter(buffer);
+
+            result = {json: {parameter}};
+          }
+
+          // log.debug(result);
+        }
+
+        break;
+      case MB_FUNCTION.READ_EXCEPTION_STATUS:
+        result = await client.readExceptionStatus();
+
+        result = {
+          json: {
+            exceptionStatus: parseDanfossExceptionStatus(result as number),
+          },
+        };
+        break;
+      case MB_FUNCTION.READ_DEVICE_ID:
+        result = await client.readDeviceIdentification(
+          DEVICE_ID_CODE.BASIC_DEVICE_IDENTIFICATION,
+          1,
+        );
+
+        log.info(result);
+        break;
+      case MB_FUNCTION.READ_COMPRESSED:
+        {
+          log.info('Someone wants to read compressed!');
+          const addresses = mbOptions.addrArr;
+          log.info('addresses: ' + addresses);
+          result = await client.readCompressed(addresses);
+          log.info(result);
+          result = result.data.map((value, i) => {
+            return {
+              addr: addresses[i],
+              value,
+            };
+          });
+          log.info(result);
+        }
+        break;
       default:
-        console.log('Unknown modbus function!');
+        log.info('Unknown modbus function!');
         errorCode = 998;
         errorText = 'Modbus function not implemented yet';
     }
-  } catch (err: unknown) {
-    console.log('EXCEPTION!!');
-    console.log(err);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (err: any) {
+    log.error('EXCEPTION!!');
+    log.error(err);
 
-    if (!(err instanceof Error)) {
+    if (!err.message && !(err instanceof Error)) {
       errorCode = ERROR_CODE_UNKNOWN;
       errorText = 'Unknown error';
     } else if ('modbusCode' in err) {
@@ -204,9 +276,11 @@ export async function modbusRtuRequest(configuration: SingleModbusRtuRequestConf
   const client = new ModbusRTU();
   if (client.isOpen) client.close(() => null);
   try {
+    log.info(`Opening ${port}...`);
     await client.connectRTUBuffered(port, {baudRate, parity, dataBits, stopBits});
-    // console.log('Modbus RTU port opened!')
+    log.info('Port opened, sending request');
     result = await modbusRequest(client, unitId, timeout, mbFunction, mbOptions);
+    log.info('Got response!');
   } catch (error) {
     if (client.isOpen) client.close(() => null);
     return {
@@ -218,7 +292,12 @@ export async function modbusRtuRequest(configuration: SingleModbusRtuRequestConf
     };
   }
 
-  if (client.isOpen) client.close(() => null);
+  if (client.isOpen) {
+    log.info('Closing port!');
+    client.close(() => null);
+  }
+
+  log.info('Returning result!');
 
   return result;
 }
@@ -233,11 +312,11 @@ export async function modbusTcpRequest(
   try {
     client.setTimeout(MODBUS_TCP_CONNECT_TIMEOUT);
     await client.connectTCP(ip, {port});
-    // console.log('Modbus TCP connected!')
+    // console.log.info('Modbus TCP connected!')
 
     result = await modbusRequest(client, unitId, timeout, mbFunction, mbOptions);
   } catch (error) {
-    if (client.isOpen) client.close(() => null); // TODO: Comment this to keep connections open
+    if (client.isOpen) client.close(() => null);
     return {
       result: null,
       executionTime: MODBUS_TCP_CONNECT_TIMEOUT,
@@ -247,7 +326,7 @@ export async function modbusTcpRequest(
     };
   }
 
-  if (client.isOpen) client.close(() => null); // TODO: Comment this to keep connections open
+  if (client.isOpen) client.close(() => null);
 
   return result;
 }

@@ -4,9 +4,11 @@ import {EventEmitter} from 'events';
 import {crc16modbus} from 'crc';
 import {splitFrame} from './frameSplitter.mjs';
 import {EXCEPTION_CODE, FRAME_TYPE, MB_FUNCTION} from './modbusCommon';
-import {formatByteArray, formatTimestamp} from './utilities';
+import {formatByteArray, formatTimestamp, logger} from './utilities';
 import {parseData} from './parseData';
 import {DANFOSS_BAUDRATE_SYNC_ADDRESS} from './danfoss';
+
+const log = logger.createLogger('Modbus Analyzer');
 
 const REQUEST_TIMEOUT = 100;
 
@@ -15,24 +17,24 @@ function parseModbusFrame(buffer: Buffer, timestamp: Date): MyModbusFrame {
   let address = null;
   let mbFunction = null;
   let data = null;
-  // console.log(formatByteArray(buffer))
+  // log.infoformatByteArray(buffer))
 
   if (buffer.length < 4) {
-    // console.log('Not enough data to be a real frame')
+    // log.info('Not enough data to be a real frame')
     data = buffer;
   } else {
-    // console.log('Length is at least 4 bytes, so we will check CRC')
+    // log.info('Length is at least 4 bytes, so we will check CRC')
     const frameData = buffer.slice(0, -2);
-    // console.log('Frame bytes:', formatByteArray(frameData))
+    // log.info('Frame bytes:', formatByteArray(frameData))
     const crcIn = buffer.readUInt16LE(buffer.length - 2);
     crc = crcIn === crc16modbus(frameData);
     if (crc) {
-      // console.log('CRC is OK!')
+      // log.info('CRC is OK!')
       address = frameData.readUint8(0);
       mbFunction = frameData.readUint8(1);
       data = frameData.slice(2);
     } else {
-      // console.log('BAD CRC!')
+      // log.info('BAD CRC!')
       data = buffer;
     }
   }
@@ -91,9 +93,9 @@ function requestOrResponse(frame: MyModbusFrame, previousFrame: null | MyModbusF
       }
       return FRAME_TYPE.UNKNOWN;
     case MB_FUNCTION.READ_FILE:
-      // console.log('Read file length:')
-      // console.log(frame.data.byteLength)
-      // console.log(frame.data.length)
+      // log.info('Read file length:')
+      // log.infoframe.data.byteLength)
+      // log.infoframe.data.length)
       if (frame.data.byteLength !== 8) {
         return FRAME_TYPE.RESPONSE;
       }
@@ -115,7 +117,7 @@ export class ModbusAnalyzer extends EventEmitter {
     return new Promise((resolve, reject) => {
       const {port, baudRate, parity, dataBits, stopBits} = configuration;
 
-      console.log('Creating now SerialPort');
+      log.info('Creating now SerialPort');
       this.serialPort = new SerialPort({
         path: port,
         baudRate,
@@ -124,7 +126,7 @@ export class ModbusAnalyzer extends EventEmitter {
         stopBits,
         autoOpen: false,
       });
-      console.log('Attaching to parser');
+      log.info('Attaching to parser');
       const parser = this.serialPort.pipe(new InterByteTimeoutParser({interval: 15}));
 
       let previousFrame: MyModbusFrame | null = null;
@@ -173,7 +175,7 @@ export class ModbusAnalyzer extends EventEmitter {
 
       this.serialPort.open(error => {
         if (error) {
-          console.log(error);
+          log.error(error);
           reject('Unable to open port');
         }
         resolve(true);
@@ -182,12 +184,12 @@ export class ModbusAnalyzer extends EventEmitter {
   }
 
   async stop() {
-    console.log('Stopping analyzer');
-    if (this.serialPort) console.log(this.serialPort.isOpen);
+    log.info('Stopping analyzer');
+    if (this.serialPort) log.info(this.serialPort.isOpen);
     if (!this.serialPort) {
       return;
     }
-    console.log('Closing port!');
+    log.info('Closing port!');
     this.serialPort.close(() => {
       return;
     });

@@ -18,8 +18,10 @@ interface NetworkInfo {
 
 interface ScanLogItem {
   type: string;
-  message: string;
+  text: string;
 }
+
+type ScanProgress = [number, number];
 
 interface ComPort {
   path: string;
@@ -59,6 +61,8 @@ interface MbFunction {
 
 interface MbOption extends MbFunction {
   value: number;
+  values?: number[];
+  maxLength?: number;
 }
 
 interface ModbusRequestConfiguration {
@@ -114,6 +118,13 @@ interface SingleModbusRtuRequestConfiguration
 interface TcpRequestConfiguration extends ModbusRequestConfiguration {
   ip: string;
   port: number;
+}
+
+interface ScannerTcpConfiguration {
+  startIp: string;
+  endIp: string;
+  port: number;
+  timeout: number;
 }
 
 interface SingleModbusTcpRequestConfiguration
