@@ -1,13 +1,12 @@
 import {defineStore} from 'pinia';
-import useComPorts from '/@/components/useComPorts';
-
-const {comPorts: availableComPorts} = await useComPorts();
+import {useSystemStore} from './useSystem';
 
 interface ClientConfiguration {
   connectionType: CONNECTION_TYPE;
   common: {
     unitId: number;
     mbFunction: number;
+    mbFunctionParameters: MbFunctionParameter[];
   };
   tcp: TcpRequestConfiguration;
   rtu: RtuRequestConfiguration;
@@ -19,6 +18,7 @@ interface ServerConfiguration {
     unitId: number;
   };
   tcp: {
+    host: string;
     port: number;
   };
   rtu: SerialPortConfiguration;
@@ -29,6 +29,7 @@ interface ScannerConfiguration {
   common: {
     minUnitId: number;
     maxUnitId: number;
+    unitIds: number[];
   };
   rtu: RtuRequestConfiguration & {
     requestDelay: number;
@@ -39,6 +40,7 @@ interface ScannerConfiguration {
 interface EkcDeviceConfiguration {
   common: {
     unitId: number;
+    useCache: boolean;
   };
   rtu: RtuRequestConfiguration;
 }
@@ -54,35 +56,12 @@ interface AnalyzerConfiguration {
   rtu: RtuRequestConfiguration;
 }
 
-// interface State {
-//   comPorts: ComPort[];
-//   networkInfo: NetworkInfo;
-//   clientConfiguration: ClientConfiguration;
-//   serverConfiguration: ServerConfiguration;
-//   scannerConfiguration: ScannerConfiguration;
-//   analyzerConfiguration: AnalyzerConfiguration;
-// }
-
 interface Defaults {
   rtu: RtuRequestConfiguration;
   tcp: {
     port: number;
   };
 }
-
-const defaults: Defaults = {
-  rtu: {
-    baudRate: 38400,
-    parity: 'even',
-    dataBits: 8,
-    stopBits: 1,
-    timeout: 100,
-    port: availableComPorts[0].path,
-  },
-  tcp: {
-    port: 502,
-  },
-};
 
 // TODO: Get state from main process
 // TODO: Store state of Modbus Server, Analyzer, etc.
@@ -92,22 +71,31 @@ const defaults: Defaults = {
 export const useModbusStore = defineStore(
   'modbus',
   () => {
-    const comPorts: Ref<ComPort[]> = ref(availableComPorts);
+    const {comPorts: availableComPorts} = useSystemStore();
 
-    const networkInfo: Ref<NetworkInfo> = ref({
-      interface: '',
-      ipAddress: '',
-      netmask: '',
-      gateway: '',
-      firstIpOnSubnet: '',
-      lastIpOnSubnet: '',
-    });
+    const defaults: Defaults = {
+      rtu: {
+        baudRate: 38400,
+        parity: 'even',
+        dataBits: 8,
+        stopBits: 1,
+        timeout: 100,
+        port: availableComPorts[0].path,
+      },
+      tcp: {
+        port: 502,
+      },
+    };
 
     const clientConfiguration: Ref<ClientConfiguration> = ref({
       connectionType: CONNECTION_TYPE.TCP,
       common: {
         unitId: 1,
         mbFunction: mbFunctions[2].id,
+        mbFunctionParameters: {
+          ...mbFunctions[2].parameters,
+          value: mbFunctions[2].parameters[0].default,
+        },
       },
       tcp: {
         ip: '',
@@ -131,6 +119,7 @@ export const useModbusStore = defineStore(
       },
       tcp: {
         port: defaults.tcp.port,
+        host: '0.0.0.0',
       },
       rtu: {
         baudRate: 19200,
@@ -146,6 +135,7 @@ export const useModbusStore = defineStore(
       common: {
         minUnitId: 1,
         maxUnitId: 247,
+        unitIds: [],
       },
       rtu: {
         port: defaults.rtu.port,
@@ -167,6 +157,7 @@ export const useModbusStore = defineStore(
     const ekcDeviceConfiguration: Ref<EkcDeviceConfiguration> = ref({
       common: {
         unitId: 1,
+        useCache: true,
       },
       rtu: {
         port: defaults.rtu.port,
@@ -211,35 +202,41 @@ export const useModbusStore = defineStore(
       return `${code}: Unknown Function`;
     });
 
-    const selectedMbFunction = computed(() => {
-      const mbFunction = clientConfiguration.value.common.mbFunction;
+    // const selectedMbFunction = computed(() => {
+    //   const mbFunction = clientConfiguration.value.common.mbFunction;
+    //   if (!mbFunction) {
+    //     return null;
+    //   }
+
+    //   return mbFunctions.find(i => i.id === mbFunction);
+    // });
+
+    // const mbOptions: Ref<MbOption[]> = ref([]);
+
+    const getParametersForMbFunction = (mbFunctionId: number): MbFunctionParameter[] => {
+      // console.log('getParametersForMbFunction => ', mbFunctionId);
+      const mbFunction = mbFunctions.find(i => i.id === mbFunctionId);
+
       if (!mbFunction) {
-        return null;
-      }
-
-      return mbFunctions.find(i => i.id === mbFunction);
-    });
-
-    const mbOptions: Ref<MbOption[]> = ref([]);
-
-    const updateVisibleMbOptions = () => {
-      const modbusFunction = selectedMbFunction.value;
-
-      if (!modbusFunction) {
+        // console.log('No function found');
         return [];
       }
 
-      mbOptions.value = modbusFunction.parameters.map(i => {
+      const parameters = mbFunction.parameters.map(i => {
         return {
           ...i,
           value: i.default,
           values: i.type === 'numberArray' ? [i.default] : undefined,
         };
       });
+
+      // console.log('parameters => ', parameters);
+
+      return parameters;
     };
 
-    watch(selectedMbFunction, updateVisibleMbOptions);
-    updateVisibleMbOptions();
+    // watch(selectedMbFunction, updateVisibleMbOptions);
+    // updateVisibleMbOptions();
 
     const baudRateOptions = computed(() => [
       {value: 4800, label: '4 800'},
@@ -262,8 +259,6 @@ export const useModbusStore = defineStore(
     });
 
     return {
-      comPorts,
-      networkInfo,
       clientConfiguration,
       serverConfiguration,
       scannerConfiguration,
@@ -271,8 +266,7 @@ export const useModbusStore = defineStore(
       ekcDeviceConfiguration,
       registerScannerConfiguration,
       formatFunctionCode,
-      selectedMbFunction,
-      mbOptions,
+      getParametersForMbFunction,
       baudRateOptions,
       parityOptions,
       mbFunctionOptions,
@@ -288,40 +282,39 @@ export enum CONNECTION_TYPE {
   TCP = 1,
 }
 
-export const MODBUS_FUNCTIONS: GenericObject = {
-  1: '01: Read Coils',
-  2: '02: Read Discrete Inputs',
-  3: '03: Read Holding Registers',
-  4: '04: Read Input Registers',
-  5: '05: Write Single Coil',
-  6: '06: Write Single Holding',
-  7: '07: Read Exception Status',
-  15: '15: Write Multiple Coils',
-  16: '16: Write Multiple Holding',
-  20: '20: Read File Record',
-  21: '21: Write File Record',
-  43: '43: Read Device Identification',
-  65: '65: Read Compressed',
-  67: '65: Read Exception Status (Danfoss)',
-  129: 'Exception: Read Coils',
-  130: 'Exception: Read Discrete Inputs',
-  131: 'Exception: Read Holding Registers',
-  132: 'Exception: Read Input Registers',
-  133: 'Exception: Write Single Coil',
-  134: 'Exception: Write Single Holding',
-  135: 'Exception: Read Exception Status',
-  143: 'Exception: Write Multiple Coils',
-  144: 'Exception: Write Multiple Holding',
-  148: 'Exception: Read File Record',
-  149: 'Exception: Write File Record',
-  171: 'Exception: Read Device Identification',
-  193: 'Exception: Read Compressed',
-};
+export enum MODBUS_FUNCTIONS {
+  '01: Read Coils' = 1,
+  '02: Read Discrete Inputs' = 2,
+  '03: Read Holding Registers' = 3,
+  '04: Read Input Registers' = 4,
+  '05: Write Single Coil' = 5,
+  '06: Write Single Holding' = 6,
+  '07: Read Exception Status' = 7,
+  '15: Write Multiple Coils' = 15,
+  '16: Write Multiple Holding' = 16,
+  '20: Read File Record' = 20,
+  '21: Write File Record' = 21,
+  '43: Read Device Identification' = 43,
+  '65: Read Compressed' = 65,
+  '65: Read Exception Status (Danfoss)' = 67,
+  'Exception: Read Coils' = 129,
+  'Exception: Read Discrete Inputs' = 130,
+  'Exception: Read Holding Registers' = 131,
+  'Exception: Read Input Registers' = 132,
+  'Exception: Write Single Coil' = 133,
+  'Exception: Write Single Holding' = 134,
+  'Exception: Read Exception Status' = 135,
+  'Exception: Write Multiple Coils' = 143,
+  'Exception: Write Multiple Holding' = 144,
+  'Exception: Read File Record' = 148,
+  'Exception: Write File Record' = 149,
+  'Exception: Read Device Identification' = 171,
+  'Exception: Read Compressed' = 193,
+}
 
-export const mbFunctions = [
+export const mbFunctions: MbFunctionDefinition[] = [
   {
     id: 1,
-    write: false,
     name: MODBUS_FUNCTIONS[1],
     description: `This command allows you to request the status of one or multiple coils.
 Coils are typically writable and can be in either an "ON" (1) or "OFF" (0) state.
@@ -333,7 +326,6 @@ For writing, see function 5 and 15.`,
   },
   {
     id: 2,
-    write: false,
     name: MODBUS_FUNCTIONS[2],
     description: `This command allows you to request the status of one or multiple discrete inputs.
 Discrete inputs are strictly read-only and can be in either an "ON" (1) or "OFF" (0) state.`,
@@ -344,7 +336,6 @@ Discrete inputs are strictly read-only and can be in either an "ON" (1) or "OFF"
   },
   {
     id: 3,
-    write: false,
     name: MODBUS_FUNCTIONS[3],
     description: `This command requests the status for one or multiple holding registers.
 Holding registers are typically writable and are composed of 2 bytes (16 bits) and typically represents either a signed integer (-32768 to 32767) or an unsigned integer (0 to 65535).
@@ -356,7 +347,6 @@ For writing, see function 6 and 16.`,
   },
   {
     id: 4,
-    write: false,
     name: MODBUS_FUNCTIONS[4],
     description: `This command allows you to request the status of one or multiple input registers.
 Input registers are strictly read-only and are composed of 2 bytes (16 bits).`,
@@ -367,7 +357,6 @@ Input registers are strictly read-only and are composed of 2 bytes (16 bits).`,
   },
   {
     id: 5,
-    write: true,
     name: MODBUS_FUNCTIONS[5],
     description: `This command lets you write a new value to a single coil.
 Coils can be set to either an "ON" (1) or "OFF" (0) state.
@@ -379,7 +368,6 @@ For writing multiple coils simultaneously, see function 15.`,
   },
   {
     id: 6,
-    write: true,
     name: MODBUS_FUNCTIONS[6],
     description: `With this command, you can write a new value to a single holding register.
 Holding registers are typically writable and are composed of 2 bytes (16 bits) and typically represents either a signed integer (-32768 to 32767) or an unsigned integer (0 to 65535).`,
@@ -390,7 +378,6 @@ Holding registers are typically writable and are composed of 2 bytes (16 bits) a
   },
   {
     id: 7,
-    write: false,
     name: MODBUS_FUNCTIONS[7],
     description: `With this command, you can read eight Exception Status outputs in a remote
     device.`,
@@ -420,7 +407,6 @@ Holding registers are typically writable and are composed of 2 bytes (16 bits) a
   // },
   {
     id: 20,
-    write: false,
     name: MODBUS_FUNCTIONS[20],
     description:
       'This command enables you to read a block of data from one or more files stored on the server (slave) device. It is particularly useful for retrieving structured data or records from designated files. The read operation can encompass multiple files and records within those files, offering a versatile means of gathering information.',
@@ -433,7 +419,7 @@ Holding registers are typically writable and are composed of 2 bytes (16 bits) a
   },
   // {
   //   id: 21,
-  //   write: false,
+
   //   name: MODBUS_FUNCTIONS[21],
   //   description:
   //     'This command empowers you to write a block of data to one or more files stored on the server (slave) device. It offers the ability to update and modify structured data or records within designated files. By combining multiple files and records within those files, this function provides a versatile approach to altering and managing information.',
@@ -444,7 +430,6 @@ Holding registers are typically writable and are composed of 2 bytes (16 bits) a
   // },
   {
     id: 43,
-    write: false,
     name: MODBUS_FUNCTIONS[43],
     description: `This command facilitates the retrieval of comprehensive information about the device from the server (slave) device. It can give information about the device's identity, manufacturer, supported features, and more.`,
     parameters: [
@@ -454,7 +439,6 @@ Holding registers are typically writable and are composed of 2 bytes (16 bits) a
   },
   {
     id: 65,
-    write: false,
     name: MODBUS_FUNCTIONS[65],
     description:
       'Function specific to Danfoss controllers. With this function, you can efficiently read up to 16 non-consecutive parameters from the controller in a single request. Unlike standard Modbus functions, this function enables you to retrieve parameters with addresses that are not necessarily in sequential order.',

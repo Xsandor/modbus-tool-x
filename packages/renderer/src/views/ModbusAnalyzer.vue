@@ -6,6 +6,16 @@ import useCSV from '/@/components/useCSV';
 const modbusStore = useModbusStore();
 const {saveCSV} = useCSV();
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const props = defineProps({
+  tabId: {
+    type: Number,
+    required: true,
+  },
+});
+
+// TODO: Use tab id to identify Modbus Analyzer instance on the server
+
 const dataRows: Ref<GenericObject[]> = ref([]);
 
 const starting: Ref<boolean> = ref(false);
@@ -62,14 +72,23 @@ function exportLog() {
   saveCSV(formattedList, 'Modbus Analyzer');
 }
 
-const allModbusFunctions: {
+interface ModbusFunctionOption {
   id: number;
   name: string;
-}[] = Object.keys(MODBUS_FUNCTIONS).map(key => {
-  return {id: parseInt(key), name: MODBUS_FUNCTIONS[key]};
-});
+}
 
-const modbusFunctionOptions = [{id: 0, name: 'Show all'}].concat(allModbusFunctions);
+const modbusFunctionOptions: ModbusFunctionOption[] = Object.keys(MODBUS_FUNCTIONS).reduce(
+  (acc: ModbusFunctionOption[], key: string) => {
+    const id = Number(key);
+    if (isNaN(id) || id > 128) return acc;
+
+    const name = MODBUS_FUNCTIONS[id];
+
+    acc.push({id, name});
+    return acc;
+  },
+  [{id: 0, name: 'Show all'}],
+);
 
 const analyzerError: Ref<string> = ref('');
 
@@ -143,10 +162,7 @@ onBeforeUnmount(() => {
       :lg="8"
       :xl="5"
     >
-      <el-card
-        header="Modbus Analyzer"
-        class="box-card"
-      >
+      <collapsible-card title="Modbus Analyzer">
         <el-form
           ref="ruleFormRef"
           label-width="120px"
@@ -171,7 +187,7 @@ onBeforeUnmount(() => {
             </el-button>
           </el-form-item>
         </el-form>
-      </el-card>
+      </collapsible-card>
     </el-col>
     <el-col
       :span="24"
@@ -179,7 +195,7 @@ onBeforeUnmount(() => {
       :lg="16"
       :xl="19"
     >
-      <el-card>
+      <el-card shadow="never">
         <template #header>
           <div class="card-header">
             <span>Result</span>
@@ -218,7 +234,7 @@ onBeforeUnmount(() => {
           <el-table
             v-loading="starting"
             :data="filteredLog"
-            border
+            :border="true"
             :empty-text="started ? 'Awaiting data' : 'Please start analyzer'"
             :row-class-name="dataRowClassName"
             element-loading-text="Opening serial port..."

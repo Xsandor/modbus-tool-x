@@ -1,14 +1,27 @@
 <template>
   <el-tabs
-    v-model="tabsStore.activeTabId"
+    v-model="modbusStore.activeTabId"
     type="border-card"
     class="main-tabs"
     editable
-    @tab-add="tabsStore.openNewTab"
-    @tab-remove="tabsStore.closeTab"
+    @tab-add="modbusStore.openNewTab"
+    @tab-remove="modbusStore.closeTab"
   >
+    <!-- <el-tab-pane
+      v-for="link of links"
+      :key="link.routeName"
+      :name="link.routeName"
+      :label="link.name"
+    >
+      <template #label>
+        <el-icon style="margin-right: 5px">
+          <component :is="link.icon" />
+        </el-icon>
+        <span>{{ link.name }}</span>
+      </template>
+    </el-tab-pane> -->
     <el-tab-pane
-      v-for="tab in tabsStore.tabs"
+      v-for="tab in modbusStore.tabs"
       :key="tab.id"
       :name="tab.id"
       :label="tab.name"
@@ -19,31 +32,80 @@
         </el-icon>
         <span>{{ tab.name }}</span>
       </template>
-      <component
-        :is="componentForTab(tab.component)"
-        :tab-id="tab.id"
-      />
+      <component :is="componentForTab(tab.component)" />
     </el-tab-pane>
+    <!-- <Suspense>
+      <router-view
+        v-if="!loading"
+        v-slot="{Component}"
+      >
+        <keep-alive>
+          <component :is="Component" />
+        </keep-alive>
+      </router-view>
+    </Suspense> -->
   </el-tabs>
-  <el-button
-    style="position: fixed; top: 34px; right: 10px; margin-top: 4px; margin-right: 2px"
-    :circle="true"
-    size="small"
-    @click="toggleDarkMode"
-  >
-    <el-icon
-      :size="18"
-      :class="isDark ? 'icon-dark' : 'icon-light'"
-      ><ElIconMoon v-if="!isDark" /><ElIconSunny v-else
-    /></el-icon>
-  </el-button>
+  <!-- <el-container>
+    <el-header>
+      <img
+        height="45"
+        :src="logo"
+      />
+    </el-header>
+    <el-container>
+      <el-aside width="230px">
+        <el-card header="Navigation">
+          <el-menu
+            class="el-menu-vertical-demo"
+            :router="true"
+            :default-active="$route.name?.toString()"
+          >
+            <el-menu-item
+              v-for="link of links"
+              :key="link.routeName"
+              :index="link.routeName"
+            >
+              <el-icon>
+                <component :is="link.icon" />
+              </el-icon>
+              <span>{{ link.name }}</span>
+            </el-menu-item>
+          </el-menu>
+        </el-card>
+      </el-aside>
+      <el-container>
+        <el-main>
+          <el-scrollbar>
+            <Suspense>
+              <router-view
+                v-if="!loading"
+                v-slot="{Component, route}"
+              >
+                <Transition
+                  name="el-fade-in-linear"
+                  appear
+                  mode="out-in"
+                >
+                  <div :key="route.name || 'undefined'">
+                    <keep-alive>
+                      <component :is="Component" />
+                    </keep-alive>
+                  </div>
+                </Transition>
+              </router-view>
+            </Suspense>
+          </el-scrollbar>
+        </el-main>
+      </el-container>
+    </el-container>
+  </el-container> -->
 </template>
 
 <script lang="ts" setup>
-import {useDark} from '@vueuse/core';
-import {network, titleBar} from '#preload';
-import {useSystemStore} from '/@/stores/useSystem';
-import {useTabsStore} from '/@/stores/useTabs';
+import {network} from '#preload';
+// import router from './router';
+// import logo from '../assets/Modbus Tool X.svg';
+import {useModbusStore} from '/@/stores/useModbus';
 
 import ModbusClient from '/@/views/ModbusClient.vue';
 import ModbusServer from '/@/views/ModbusServer.vue';
@@ -53,9 +115,6 @@ import ModbusAnalyzer from '/@/views/ModbusAnalyzer.vue';
 import DanfossExplorer from '/@/views/DanfossExplorer.vue';
 import RegisterScanner from '/@/views/RegisterScanner.vue';
 import NewTab from '/@/views/NewTab.vue';
-// import {TitlebarColor} from 'custom-electron-titlebar';
-
-const isDark = useDark();
 
 function componentForTab(componentName: string) {
   switch (componentName) {
@@ -99,35 +158,28 @@ function iconForTab(componentName: string) {
   }
 }
 
-function toggleDarkMode() {
-  // titlebar!.updateBackground(TitlebarColor.fromHex(isDark.value ? '#2c2c2c' : '#ffffff'));
-  isDark.value = !isDark.value;
-  titleBar.setDark(isDark.value);
-}
-
 const loading = ref(true);
 
-const tabsStore = useTabsStore();
-const systemStore = useSystemStore();
+const modbusStore = useModbusStore();
 
-function setupTabHandling() {
+onMounted(() => {
   window.addEventListener('keydown', event => {
     // Filter out events that are not ctrl+T or ctrl+W
     if (!event.ctrlKey) return;
 
     if (event.code === 'KeyT') {
-      return tabsStore.openNewTab();
+      return modbusStore.openNewTab();
     }
 
     if (event.code === 'KeyW') {
-      return tabsStore.closeTab();
+      return modbusStore.closeTab();
     }
   });
 
   document.querySelector('.el-tabs__nav-scroll')?.addEventListener('dblclick', event => {
     // Filter out events that are triggered by clicking something else than the background
     if (event.target !== event.currentTarget) return;
-    tabsStore.openNewTab();
+    modbusStore.openNewTab();
   });
 
   document.querySelector('.el-tabs__nav-scroll')?.addEventListener('mouseup', (event: unknown) => {
@@ -144,18 +196,12 @@ function setupTabHandling() {
     const tabId = parseInt(tabElement.id.substring(4));
 
     // Close tab
-    tabsStore.closeTab(tabId);
+    modbusStore.closeTab(tabId);
   });
-}
-
-onMounted(() => {
-  titleBar.setDark(isDark.value);
-
-  setupTabHandling();
 });
 
 network.onInfo((_event, netInfo) => {
-  systemStore.networkInfo = netInfo;
+  modbusStore.networkInfo = netInfo;
   loading.value = false;
 });
 

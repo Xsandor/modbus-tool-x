@@ -8,7 +8,7 @@
       placeholder="Select port"
     >
       <el-option
-        v-for="item in modbusStore.comPorts"
+        v-for="item in comPorts"
         :key="item.path"
         :label="item.path"
         :value="item.path"
@@ -24,7 +24,7 @@
       placeholder="Select baudRate"
     >
       <el-option
-        v-for="item in modbusStore.baudRateOptions"
+        v-for="item in baudRateOptions"
         :key="item.value"
         :label="item.label"
         :value="item.value"
@@ -40,7 +40,7 @@
       placeholder="Select parity"
     >
       <el-option
-        v-for="item in modbusStore.parityOptions"
+        v-for="item in parityOptions"
         :key="item.value"
         :label="item.label"
         :value="item.value"
@@ -85,9 +85,11 @@
 </template>
 
 <script setup lang="ts">
+import {useSystemStore} from '/@/stores/useSystem';
 import {useModbusStore} from '/@/stores/useModbus';
 
-const modbusStore = useModbusStore();
+const {comPorts} = useSystemStore();
+const {baudRateOptions, parityOptions} = useModbusStore();
 
 const props = defineProps({
   modelValue: {

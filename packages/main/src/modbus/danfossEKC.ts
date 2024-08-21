@@ -47,6 +47,32 @@ interface Parameter {
 // firstPNU, groups and parameters are saved in a key with the format: deviceModel:version
 const cachedDeviceModels: GenericObject = {};
 
+// Read file in electron app folder
+import {readFile, writeFile} from 'fs/promises';
+import {app} from 'electron';
+
+const deviceModelsFilePath = app.getPath('userData') + '/cachedDeviceModels.json';
+
+async function readCachedDeviceModels(): Promise<void> {
+  try {
+    const data = await readFile(deviceModelsFilePath, 'utf-8');
+    const json = JSON.parse(data);
+    Object.assign(cachedDeviceModels, json);
+  } catch (err) {
+    log.error(`Could not read deviceModelFile: ${err}`);
+  }
+}
+
+async function writeCachedDeviceModels(): Promise<void> {
+  try {
+    await writeFile(deviceModelsFilePath, JSON.stringify(cachedDeviceModels), 'utf-8');
+  } catch (err) {
+    log.error(`Could not read deviceModelFile: ${err}`);
+  }
+}
+
+readCachedDeviceModels();
+
 interface DanfossEkcEventMap {
   status: {
     text: string;
@@ -67,10 +93,12 @@ export class DanfossEKC extends EventEmitter {
   firstPNU: undefined | number;
   activeGroup: null | number = null;
   dataRequestActive = false;
+  useCache: boolean;
 
-  constructor(serialPortConfiguration: SerialPortConfiguration, unitId: number) {
+  constructor(serialPortConfiguration: SerialPortConfiguration, unitId: number, useCache: boolean) {
     super();
     this.unitId = unitId;
+    this.useCache = useCache;
     this.client = new ModbusRTU();
     this.client.setID(unitId);
     this.client.setTimeout(200);
@@ -121,6 +149,10 @@ export class DanfossEKC extends EventEmitter {
   }
 
   async dataRequestLoop() {
+    if (this.client.isOpen === false) {
+      return;
+    }
+
     if (this.dataRequestActive) {
       return;
     }
@@ -251,20 +283,29 @@ export class DanfossEKC extends EventEmitter {
   }
 
   saveDeviceModel() {
-    // TODO: Save to file
     cachedDeviceModels[`${this.deviceModel}:${this.version}`] = clone({
       firstPNU: this.firstPNU,
       groups: this.groups,
       parameters: this.parameters,
     });
+    writeCachedDeviceModels();
   }
 
   loadDeviceModel() {
-    // TODO: Load from file
+    // Return false to load device if useCache is false
+    if (!this.useCache) {
+      return false;
+    }
+
+    // Check if device model is cached
     const cachedDeviceModel = cachedDeviceModels[`${this.deviceModel}:${this.version}`];
+
+    // Return false if device model is not cached
     if (!cachedDeviceModel) {
       return false;
     }
+
+    // Load cached device model
     this.firstPNU = cachedDeviceModel.firstPNU;
     this.groups = cachedDeviceModel.groups;
     this.parameters = cachedDeviceModel.parameters;
@@ -283,8 +324,6 @@ export class DanfossEKC extends EventEmitter {
   }
 
   async initiate() {
-    // TODO: Make it possible to force a new scan even if device model is cached
-
     // log.info('Initiating Danfoss EKC');
     this.status('Connecting...', 0);
     await this.connect();

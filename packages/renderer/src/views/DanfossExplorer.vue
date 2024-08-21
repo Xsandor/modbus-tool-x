@@ -3,13 +3,10 @@
     <el-col
       :span="24"
       :md="12"
-      :lg="9"
+      :lg="8"
       :xl="6"
     >
-      <el-card
-        header="Setup"
-        class="box-card"
-      >
+      <collapsible-card title="Danfoss Explorer">
         <el-form
           ref="form"
           label-width="120px"
@@ -23,7 +20,16 @@
               max="254"
             />
           </el-form-item>
+          <el-form-item label="Use cache">
+            <el-switch v-model="modbusStore.ekcDeviceConfiguration.common.useCache" />
+          </el-form-item>
           <el-form-item>
+            <el-button
+              :disabled="!initiated"
+              @click="disconnect"
+            >
+              Disconnect
+            </el-button>
             <el-button
               type="primary"
               @click="initiate"
@@ -32,20 +38,20 @@
             </el-button>
           </el-form-item>
         </el-form>
-      </el-card>
-      <el-card header="Device">
-        <template v-if="!initiated && !initiating">
-          <el-text>Please connect to a device</el-text>
-        </template>
+      </collapsible-card>
+      <el-card
+        shadow="never"
+        header="Device"
+      >
+        <el-text>{{ status }}</el-text>
         <template v-if="initiating">
-          <el-text>{{ status }}</el-text>
           <el-progress :percentage="progress" />
         </template>
         <el-descriptions
           v-if="initiated"
           :column="1"
           style="max-width: 400px"
-          border
+          :border="true"
         >
           <el-descriptions-item
             label="Address"
@@ -70,8 +76,13 @@
         </el-descriptions>
       </el-card>
     </el-col>
-    <el-col :span="18">
+    <el-col
+      :span="24"
+      :lg="16"
+      :xl="18"
+    >
       <el-card
+        shadow="never"
         header="Parameters"
         style="white-space: pre"
       >
@@ -102,7 +113,7 @@
                           <el-descriptions
                             :column="2"
                             style="max-width: 400px"
-                            border
+                            :border="true"
                           >
                             <el-descriptions-item
                               label="Min"
@@ -167,7 +178,7 @@
                           <el-descriptions
                             :column="2"
                             style="max-width: 400px"
-                            border
+                            :border="true"
                           >
                             <el-descriptions-item
                               label="Min"
@@ -258,7 +269,7 @@ const device: Ref<GenericObject> = ref({});
 const initiating = ref(false);
 const initiated = ref(false);
 const progress = ref(0);
-const status = ref('');
+const status = ref('Connect to a device to get started');
 
 const parameterData: Ref<GenericObject> = ref({});
 
@@ -338,6 +349,7 @@ async function changeValue(parameter: any) {
         // console.log(`Parsed value from user: ${scaledValue}`);
         if (scaledValue > parameter.max || scaledValue < parameter.min) {
           ElMessage({
+            offset: 40,
             type: 'error',
             message: `Illegal value
   Supplied: ${newValue}
@@ -355,11 +367,13 @@ async function changeValue(parameter: any) {
           done();
           instance.confirmButtonLoading = false;
           ElMessage({
+            offset: 40,
             type: 'success',
             message: `Parameter changed successfully`,
           });
-        } catch (error) {
+        } catch (_error) {
           ElMessage({
+            offset: 40,
             type: 'error',
             message: 'Failed to change parameter',
           });
@@ -415,32 +429,51 @@ danfossEkc.onParameterData((_event, data) => {
 const initiate = async () => {
   status.value = 'Initiating...';
   initiated.value = false;
-  initiating.value = true;
-  parameterData.value = {};
-  const response = await danfossEkc.initiate(
-    {...modbusStore.ekcDeviceConfiguration.rtu},
-    modbusStore.ekcDeviceConfiguration.common.unitId,
-  );
-  // console.log(response);
-  device.value = response;
-  initiating.value = false;
-  initiated.value = true;
+  try {
+    initiating.value = true;
+    parameterData.value = {};
+    const response = await danfossEkc.initiate(
+      {...modbusStore.ekcDeviceConfiguration.rtu},
+      modbusStore.ekcDeviceConfiguration.common.unitId,
+      modbusStore.ekcDeviceConfiguration.common.useCache,
+    );
+    // console.log(response);
+    initiated.value = true;
+    device.value = response;
 
-  console.log(openTab.value);
+    if (!openTab.value) {
+      // console.log('Setting openTab to first group with parameters');
+      const firstGroupWithParameters = device.value.groups.find((g: GenericObject) => {
+        return device.value.parameters.some((p: GenericObject) => p.group === g.id);
+      });
 
-  if (!openTab.value) {
-    // console.log('Setting openTab to first group with parameters');
-    const firstGroupWithParameters = device.value.groups.find((g: GenericObject) => {
-      return device.value.parameters.some((p: GenericObject) => p.group === g.id);
+      // console.log(firstGroupWithParameters);
+      if (firstGroupWithParameters) {
+        openTab.value = firstGroupWithParameters.id;
+      }
+    }
+
+    // console.log('Setting active group to ' + openTab.value);
+    setActiveGroup(openTab.value);
+  } catch (_error) {
+    ElMessage({
+      offset: 40,
+      type: 'error',
+      message: 'Connection failed',
     });
-
-    // console.log(firstGroupWithParameters);
-    firstGroupWithParameters && (openTab.value = firstGroupWithParameters.id);
+    status.value = 'Connection failed, try again';
+  } finally {
+    initiating.value = false;
   }
+};
 
-  // console.log('Setting active group to ' + openTab.value);
-  setActiveGroup(openTab.value);
+const disconnect = async () => {
+  danfossEkc.disconnect();
+  initiated.value = false;
+  initiating.value = false;
+  status.value = 'Connect to a device to get started';
+  device.value = {};
 };
 </script>
 
-<style scoped lang="scss"></style>
+<style lang="scss"></style>

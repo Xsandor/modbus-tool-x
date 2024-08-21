@@ -6,10 +6,7 @@
       :lg="9"
       :xl="6"
     >
-      <el-card
-        header="Setup"
-        class="box-card"
-      >
+      <collapsible-card title="Register Scanner">
         <el-form
           ref="form"
           label-width="120px"
@@ -32,12 +29,15 @@
             </el-button>
           </el-form-item>
         </el-form>
-      </el-card>
-      <el-card header="Scanned registers">
+      </collapsible-card>
+      <el-card
+        shadow="never"
+        header="Scanned registers"
+      >
         <el-descriptions
           :column="1"
           style="max-width: 400px"
-          border
+          :border="true"
         >
           <el-descriptions-item
             label="Coils"
@@ -68,7 +68,10 @@
       :lg="15"
       :xl="18"
     >
-      <el-card class="box-card">
+      <el-card
+        shadow="never"
+        class="box-card"
+      >
         <template #header>
           <div class="card-header">
             <span>Found Registers</span>
@@ -114,6 +117,16 @@ import {useModbusStore} from '/@/stores/useModbus';
 
 const {saveCSV} = useCSV();
 const modbusStore = useModbusStore();
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const props = defineProps({
+  tabId: {
+    type: Number,
+    required: true,
+  },
+});
+
+// TODO: Use tab id to identify Register Scanner instance on the server
 
 const registers = ref([]);
 

@@ -6,18 +6,20 @@
       :lg="9"
       :xl="6"
     >
-      <el-card
+      <!-- <el-card
+        shadow="never"
         header="Modbus Scanner"
         class="box-card"
-      >
+      > -->
+      <collapsible-card title="Modbus Scanner">
         <el-form
           ref="form"
           label-width="120px"
         >
           <el-form-item label="Connection Type">
-            <el-radio-group v-model="modbusStore.scannerConfiguration.connectionType">
-              <el-radio-button label="0">Modbus RTU</el-radio-button>
-              <el-radio-button label="1">Modbus TCP</el-radio-button>
+            <el-radio-group v-model.number="modbusStore.scannerConfiguration.connectionType">
+              <el-radio-button :value="0">Modbus RTU</el-radio-button>
+              <el-radio-button :value="1">Modbus TCP</el-radio-button>
             </el-radio-group>
           </el-form-item>
           <template v-if="modbusStore.scannerConfiguration.connectionType == CONNECTION_TYPE.RTU">
@@ -42,6 +44,7 @@
               type="number"
               min="1"
               max="254"
+              :disabled="modbusStore.scannerConfiguration.common.unitIds.length > 0"
             />
           </el-form-item>
           <el-form-item label="Max. Unit ID">
@@ -50,9 +53,25 @@
               type="number"
               min="1"
               max="254"
+              :disabled="modbusStore.scannerConfiguration.common.unitIds.length > 0"
+            />
+          </el-form-item>
+          <el-form-item label="Or list of IDs">
+            <el-select
+              :model-value="modbusStore.scannerConfiguration.common.unitIds"
+              :multiple="true"
+              :filterable="true"
+              :allow-create="true"
+              :default-first-option="true"
+              :reserve-keyword="false"
+              :clearable="true"
+              no-data-text="Type new unit ID"
+              placeholder="example: 1, 3, 13"
+              @update:modelValue="updateUnitList"
             />
           </el-form-item>
           <el-form-item>
+            <el-button @click="clearScanList">Clear log</el-button>
             <el-button
               type="primary"
               :disabled="scanning"
@@ -60,10 +79,10 @@
             >
               Execute
             </el-button>
-            <el-button @click="clearScanList">Clear</el-button>
           </el-form-item>
         </el-form>
-      </el-card>
+      </collapsible-card>
+      <!-- </el-card> -->
     </el-col>
     <el-col
       :span="24"
@@ -71,83 +90,84 @@
       :lg="15"
       :xl="18"
     >
-      <el-space
-        direction="vertical"
-        :fill="true"
-        style="width: 100%"
-      >
-        <el-card>
-          <template #header>
-            <div class="card-header">
-              <span>{{ scanState }}</span>
-              <el-button
-                v-if="scanList.length"
-                :size="'small'"
-                @click="exportLog"
-              >
-                Export <el-icon class="el-icon--right"><i-ep-download /></el-icon>
-              </el-button>
-            </div>
-          </template>
-          <el-result
-            v-if="scannerError"
-            icon="error"
-            title="Error"
-            :sub-title="scannerError"
-          ></el-result>
-          <el-collapse v-model="openSections">
-            <el-collapse-item
-              name="1"
-              :disabled="!onlineItems.length"
+      <el-card shadow="never">
+        <template #header>
+          <div class="card-header">
+            <span>{{ scanState }}</span>
+            <el-button
+              v-if="scanList.length"
+              :size="'small'"
+              @click="exportLog"
             >
-              <template #title
-                >Online nodes
-                <el-tag
-                  class="ml-1"
-                  size="small"
-                  type="success"
-                  effect="dark"
-                  >{{ onlineItems.length }}</el-tag
-                ></template
-              >
-              <GridList :list="onlineItems" />
-            </el-collapse-item>
-            <el-collapse-item
-              name="2"
-              :disabled="!offlineItems.length"
+              Export <el-icon class="el-icon--right"><i-ep-download /></el-icon>
+            </el-button>
+          </div>
+        </template>
+        <el-result
+          v-if="scannerError"
+          icon="error"
+          title="Error"
+          :sub-title="scannerError"
+        ></el-result>
+        <el-empty
+          v-if="!scanList.length"
+          description="Nothing to see here yet"
+        />
+        <el-collapse
+          v-else
+          v-model="openSections"
+        >
+          <el-collapse-item
+            name="1"
+            :disabled="!onlineItems.length"
+          >
+            <template #title
+              >Online nodes
+              <el-tag
+                class="ml-1"
+                size="small"
+                type="success"
+                effect="dark"
+                >{{ onlineItems.length }}</el-tag
+              ></template
             >
-              <template #title
-                >Offline nodes
-                <el-tag
-                  class="ml-1"
-                  size="small"
-                  type="danger"
-                  effect="dark"
-                  >{{ offlineItems.length }}</el-tag
-                ></template
-              >
-              <GridList :list="offlineItems" />
-            </el-collapse-item>
-            <el-collapse-item
-              name="3"
-              :disabled="!unknownItems.length"
+            <GridList :list="onlineItems" />
+          </el-collapse-item>
+          <el-collapse-item
+            name="2"
+            :disabled="!offlineItems.length"
+          >
+            <template #title
+              >Offline nodes
+              <el-tag
+                class="ml-1"
+                size="small"
+                type="danger"
+                effect="dark"
+                >{{ offlineItems.length }}</el-tag
+              ></template
             >
-              <template #title
-                >Waiting
-                <el-tag
-                  class="ml-1"
-                  size="small"
-                  type="info"
-                  effect="dark"
-                  >{{ unknownItems.length }}</el-tag
-                ></template
-              >
-              <GridList :list="unknownItems" />
-            </el-collapse-item>
-          </el-collapse>
-        </el-card>
-        <log-container :log="resultLog" />
-      </el-space>
+            <GridList :list="offlineItems" />
+          </el-collapse-item>
+          <el-collapse-item
+            name="3"
+            :disabled="!unknownItems.length"
+          >
+            <template #title
+              >Waiting
+              <el-tag
+                class="ml-1"
+                size="small"
+                type="info"
+                effect="dark"
+                >{{ unknownItems.length }}</el-tag
+              ></template
+            >
+            <GridList :list="unknownItems" />
+          </el-collapse-item>
+        </el-collapse>
+      </el-card>
+      <log-container :log="resultLog" />
     </el-col>
   </el-row>
 </template>
@@ -160,6 +180,20 @@ import {CONNECTION_TYPE, useModbusStore} from '/@/stores/useModbus';
 
 const {saveCSV} = useCSV();
 const modbusStore = useModbusStore();
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const props = defineProps({
+  tabId: {
+    type: Number,
+    required: true,
+  },
+});
+
+function updateUnitList(val: string[]) {
+  modbusStore.scannerConfiguration.common.unitIds = val.map(Number).filter(Number);
+}
+
+// TODO: Use tab id to identify Modbus Scanner instance on the server
 
 const resultLog: Ref<ScanLogItem[]> = ref([]);
 const scanning = ref(false);
@@ -255,9 +289,7 @@ scanner.onStatus((_event, updatedScanList) => {
 });
 
 scanner.onLog((_event, messages) => {
-  console.log('Got log!');
   appendToLog(messages);
-  console.log(resultLog.value);
 });
 
 scanner.onProgress((_event, [progress, found]) => {
@@ -274,10 +306,15 @@ const startScan = async () => {
   appendToLog([{type: 'info', text: 'Starting scanner'}]);
 
   if (modbusStore.scannerConfiguration.connectionType == CONNECTION_TYPE.RTU) {
+    // console.log(modbusStore);
+    // console.log(modbusStore.scannerConfiguration);
+    // console.log(modbusStore.scannerConfiguration.common);
+    // console.log(modbusStore.scannerConfiguration.common.unitIds);
     const config = {
       ...modbusStore.scannerConfiguration.rtu,
       minUnitId: modbusStore.scannerConfiguration.common.minUnitId,
       maxUnitId: modbusStore.scannerConfiguration.common.maxUnitId,
+      unitIds: toRaw(modbusStore.scannerConfiguration.common.unitIds),
       delay: modbusStore.scannerConfiguration.rtu.requestDelay,
     };
 
@@ -293,6 +330,7 @@ const startScan = async () => {
       ...modbusStore.scannerConfiguration.tcp,
       minUnitId: modbusStore.scannerConfiguration.common.minUnitId,
       maxUnitId: modbusStore.scannerConfiguration.common.maxUnitId,
+      unitIds: modbusStore.scannerConfiguration.common.unitIds,
     };
 
     const {error} = await scanner.startTcpScan(config);
@@ -304,13 +342,6 @@ const startScan = async () => {
     }
   }
 };
-
-onMounted(() => {
-  if (!modbusStore.scannerConfiguration.tcp.startIp) {
-    modbusStore.scannerConfiguration.tcp.startIp = modbusStore.networkInfo?.firstIpOnSubnet;
-    modbusStore.scannerConfiguration.tcp.endIp = modbusStore.networkInfo?.lastIpOnSubnet;
-  }
-});
 </script>
 
 <style scoped lang="scss"></style>

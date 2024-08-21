@@ -4,6 +4,34 @@
  */
 
 import {ipcRenderer} from 'electron';
+// import {electronAPI} from '@electron-toolkit/preload';
+import {Titlebar, TitlebarColor} from 'custom-electron-titlebar';
+import type {TitleBarOptions} from 'custom-electron-titlebar/titlebar/options';
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+let titlebar: null | Titlebar;
+
+window.addEventListener('DOMContentLoaded', () => {
+  const options: TitleBarOptions = {
+    backgroundColor: TitlebarColor.fromHex('#fcfcfc'),
+    titleHorizontalAlignment: 'center',
+    enableMnemonics: true,
+    menuPosition: 'left',
+    // menuSeparatorColor: TitlebarColor.fromHex('#FF0000'),
+  };
+
+  titlebar = new Titlebar(options);
+});
+
+export const titleBar = {
+  setDark: (dark: boolean) => {
+    if (!titlebar) {
+      return;
+    }
+    titlebar.updateBackground(TitlebarColor.fromHex(dark ? '#1d1e1f' : '#fcfcfc'));
+    titlebar.updateItemBGColor(TitlebarColor.fromHex(dark ? '#393a3c' : '#dedfe0'));
+  },
+};
 
 export const csv = {
   save: async (data: any, source: string) => {
@@ -45,18 +73,28 @@ export const analyzer = {
 };
 
 export const server = {
-  startRtu: async (config: SerialPortConfiguration) => {
+  startRtu: async (config: ModbusRtuServerConfiguration) => {
     return ipcRenderer.invoke('startRtuServer', config);
   },
   stopRtu: async () => {
     return ipcRenderer.invoke('stopRtuServer');
   },
-  getData: async (serverDataRequest: ServerDataRequest) => {
-    return ipcRenderer.invoke('getServerData', serverDataRequest);
+  getRtuData: async (serverDataRequest: ServerDataRequest) => {
+    return ipcRenderer.invoke('getRtuServerData', serverDataRequest);
   },
   onLog: (callback: (event: Electron.IpcRendererEvent, ...args: any[]) => void) => {
     ipcRenderer.on('server:log', callback);
   },
+  startTcp: async (config: ModbusTcpServerConfiguration) => {
+    return ipcRenderer.invoke('startTcpServer', config);
+  },
+  stopTcp: async () => {
+    return ipcRenderer.invoke('stopTcpServer');
+  },
+  getTcpData: async (serverDataRequest: ServerDataRequest) => {
+    return ipcRenderer.invoke('getTcpServerData', serverDataRequest);
+  },
+  // TODO: Make separate loggers for TCP and RTU
 };
 
 export const scanner = {
@@ -99,8 +137,15 @@ export const registerScanner = {
 };
 
 export const danfossEkc = {
-  initiate: async (serialPortConfiguration: SerialPortConfiguration, unitId: number) => {
-    return ipcRenderer.invoke('EKC:initiate', serialPortConfiguration, unitId);
+  initiate: async (
+    serialPortConfiguration: SerialPortConfiguration,
+    unitId: number,
+    useCache: boolean,
+  ) => {
+    return ipcRenderer.invoke('EKC:initiate', serialPortConfiguration, unitId, useCache);
+  },
+  disconnect: async () => {
+    return ipcRenderer.invoke('EKC:disconnect');
   },
   onStatus: (callback: (event: Electron.IpcRendererEvent, ...args: any[]) => void) => {
     ipcRenderer.on('EKC:status', callback);
@@ -143,13 +188,23 @@ export const serial = {
   },
 };
 
-export const store = {
-  get: (key: string) => {
-    // console.log('Someone is getting the value for key:', key, ' in from the electron store');
-    return ipcRenderer.sendSync('electron-store-get', key);
-  },
-  set: (key: string, val: any) => {
-    // console.log('Someone is setting the value for key:', key, ' in the electron store to:', val);
-    ipcRenderer.send('electron-store-set', key, val);
-  },
-};
+// export const store = {
+//   get: (key: string) => {
+//     // console.log('Someone is getting the value for key:', key, ' in from the electron store');
+//     return ipcRenderer.sendSync('electron-store-get', key);
+//   },
+//   set: (key: string, val: any) => {
+//     // console.log('Someone is setting the value for key:', key, ' in the electron store to:', val);
+//     ipcRenderer.send('electron-store-set', key, val);
+//   },
+// };
+
+// if (process.contextIsolated) {
+//   try {
+//     contextBridge.exposeInMainWorld('electron', electronAPI);
+//   } catch (error) {
+//     console.error(error);
+//   }
+// } else {
+//   window.electron = electronAPI;
+// }

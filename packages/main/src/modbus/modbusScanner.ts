@@ -151,7 +151,15 @@ export class ModbusScannerTCP extends ModbusScanner {
     }
   }
 
-  async scan({startIp, endIp, port, minUnitId, maxUnitId, timeout}: ModbusTcpScanConfiguration) {
+  async scan({
+    startIp,
+    endIp,
+    port,
+    minUnitId,
+    maxUnitId,
+    timeout,
+    unitIds,
+  }: ModbusTcpScanConfiguration) {
     // Check if start IP and end IP are valid
     if (!validateIPv4(startIp) || !validateIPv4(endIp)) {
       throw new TypeError('Start IP or end IP is not a valid IPv4 address');
@@ -186,7 +194,7 @@ export class ModbusScannerTCP extends ModbusScanner {
             log.info('Reconnecting to host');
             await client.connectTCP(ip, {port});
           }
-          this.log('info', `Checking if unitID ${id} responds`);
+          this.log('info', `Checking if unit ID ${id} responds`);
           // try to read a known register that exists on each controller
           client.setID(id);
           try {
@@ -217,7 +225,9 @@ export class ModbusScannerTCP extends ModbusScanner {
 
         this.setScanItemState(scanItem, ScanState.Scanning);
 
-        for (let id = minUnitId; id <= maxUnitId; id++) {
+        const list = unitIds.length ? unitIds : range(minUnitId, maxUnitId + 1);
+
+        for (const id of list) {
           const unitOK = await checkUnitId(id);
           if (unitOK) {
             break;
@@ -288,12 +298,13 @@ export class ModbusScannerRTU extends ModbusScanner {
     minUnitId,
     maxUnitId,
     delay,
+    unitIds,
   }: ModbusRtuScanConfiguration) {
     if (minUnitId > maxUnitId) {
       throw new Error('minUnitId cannot be higher than maxUnitId');
     }
 
-    this.generateScanList(minUnitId, maxUnitId);
+    this.generateScanList(minUnitId, maxUnitId, unitIds);
 
     this.scanStartedAt = process.hrtime();
 
@@ -306,13 +317,14 @@ export class ModbusScannerRTU extends ModbusScanner {
       client.setTimeout(timeout);
 
       try {
+        this.log('info', `Trying to open ${port}...`);
         await client.connectRTUBuffered(port, {baudRate, parity, dataBits, stopBits});
         this.log('success', `Opened ${port} successfully`);
 
         const checkUnitId = async (scanItem: ScanItem) => {
           this.setScanItemState(scanItem, ScanState.Scanning);
           const id = scanItem.id as number;
-          this.log('info', `Checking if unitID ${id} responds`);
+          this.log('info', `Checking if unit ID ${id} responds`);
           // try to read a known register that exists on each controller
           client.setID(id);
           try {
@@ -390,16 +402,21 @@ export class ModbusScannerRTU extends ModbusScanner {
             DANFOSS_MODEL_REF_TYPE,
           );
 
-          const result = await modbusRequest;
+          try {
+            const result = await modbusRequest;
 
-          if (result.data) {
-            this.log('info', `${result.data}`);
-            const danfossDevice = parseDanfossOrderNumber(result.data as string);
-            scanItem.meta.deviceType = 'Danfoss ' + danfossDevice.protocolFamily;
-            scanItem.meta.deviceModel = danfossDevice.orderNumber;
-          } else {
-            log.info(result);
+            if (result.data) {
+              this.log('info', `${result.data}`);
+              const danfossDevice = parseDanfossOrderNumber(result.data as string);
+              scanItem.meta.deviceType = 'Danfoss ' + danfossDevice.protocolFamily;
+              scanItem.meta.deviceModel = danfossDevice.orderNumber;
+            } else {
+              log.info(result);
+            }
+          } catch (_error) {
+            this.log('warning', `Failed to get Danfoss Model for unitID ${scanItem.id}`);
           }
+
           this.setScanItemState(scanItem, ScanState.Online);
           scanItem.errorMessage = `Unit ID: ${id}.Online`;
         };
@@ -428,8 +445,10 @@ export class ModbusScannerRTU extends ModbusScanner {
     this.reportProgress();
   }
 
-  private generateScanList(minUnitId: number, maxUnitId: number) {
-    this.scanList = range(minUnitId, maxUnitId + 1).map((unitId: UnitId) => {
+  private generateScanList(minUnitId: number, maxUnitId: number, unitIds: number[]) {
+    const list = unitIds.length ? unitIds : range(minUnitId, maxUnitId + 1);
+
+    this.scanList = list.map((unitId: UnitId) => {
       return {
         id: unitId,
         meta: {},

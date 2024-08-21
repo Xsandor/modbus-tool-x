@@ -10,6 +10,32 @@ import {formatByteArray, readBitInBuffer} from './utilities';
 
 export function parseData(frame: MyModbusFrame, previousFrame: null | MyModbusFrame) {
   switch (frame.mbFunction) {
+    case MB_FUNCTION.READ_COILS:
+    case MB_FUNCTION.READ_DISCRETE_INPUTS:
+      if (frame.type === FRAME_TYPE.REQUEST) {
+        const firstPnu = frame.data.readUint16BE(0) - REGISTER_OFFSET;
+        const reqCount = frame.data.readUint16BE(2);
+        if (reqCount > 1) {
+          return `${firstPnu}-${firstPnu + reqCount - 1}`;
+        }
+        return firstPnu.toString();
+      } else if (frame.type === FRAME_TYPE.RESPONSE && previousFrame) {
+        // Get PNU of first register from previous frame
+        const firstPnu = previousFrame.data.readUint16BE(0) - REGISTER_OFFSET;
+        const reqCount = previousFrame.data.readUint16BE(2);
+
+        const values = [];
+        for (let i = 0; i < reqCount; i++) {
+          const value = {
+            pnu: firstPnu + i,
+            value: readBitInBuffer(frame.data, i),
+          };
+
+          values.push(value);
+        }
+        return values.map(i => `${i.pnu} = ${i.value}`).join(', ');
+      }
+      break;
     case MB_FUNCTION.READ_INPUT_REGISTERS:
     case MB_FUNCTION.READ_HOLDING_REGISTERS:
       if (frame.type === FRAME_TYPE.REQUEST) {

@@ -3,23 +3,18 @@
     <el-col
       :span="24"
       :md="18"
-      :lg="12"
+      :lg="11"
       :xl="6"
     >
-      <el-card header="Modbus Server">
+      <collapsible-card title="Modbus Server">
         <el-form
           ref="form"
           label-width="120px"
         >
           <el-form-item label="Connection Type">
             <el-radio-group v-model.number="modbusStore.serverConfiguration.connectionType">
-              <el-radio-button label="0">Modbus RTU</el-radio-button>
-              <el-radio-button
-                label="1"
-                title="Not supported yet"
-                disabled
-                >Modbus TCP</el-radio-button
-              >
+              <el-radio-button :value="0">Modbus RTU</el-radio-button>
+              <el-radio-button :value="1">Modbus TCP</el-radio-button>
             </el-radio-group>
           </el-form-item>
           <template v-if="modbusStore.serverConfiguration.connectionType === CONNECTION_TYPE.TCP">
@@ -60,25 +55,28 @@
             >
           </el-form-item>
         </el-form>
-      </el-card>
+      </collapsible-card>
     </el-col>
     <el-col
       :span="24"
       :md="18"
-      :lg="12"
+      :lg="13"
       :xl="6"
     >
-      <el-card header="Data">
+      <el-card
+        shadow="never"
+        header="Data"
+      >
         <template v-if="startedOnce">
           <el-form-item>
             <el-radio-group
               v-model="dataType"
               placeholder="Select"
             >
-              <el-radio-button label="coil"> Coils </el-radio-button>
-              <el-radio-button label="discreteInput"> Discrete Inputs </el-radio-button>
-              <el-radio-button label="holding"> Holding Registers </el-radio-button>
-              <el-radio-button label="input"> Input Registers </el-radio-button>
+              <el-radio-button value="coil"> Coils </el-radio-button>
+              <el-radio-button value="discreteInput"> Discrete Inputs </el-radio-button>
+              <el-radio-button value="holding"> Holding Registers </el-radio-button>
+              <el-radio-button value="input"> Input Registers </el-radio-button>
             </el-radio-group>
           </el-form-item>
           <el-form label-width="100">
@@ -129,17 +127,14 @@
       </el-card>
     </el-col>
   </el-row>
-  <el-row
-    :gutter="20"
-    style="margin-top: 10px"
-  >
+  <el-row :gutter="20">
     <el-col
       :span="24"
       :md="6"
-      :lg="12"
-      :xl="12"
+      :lg="24"
+      :xl="24"
     >
-      <log-container :log="logs" />
+      <log-container :log="visibleLogs" />
     </el-col>
   </el-row>
 </template>
@@ -149,30 +144,58 @@
 import {server} from '#preload';
 import {useModbusStore, CONNECTION_TYPE} from '/@/stores/useModbus';
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const props = defineProps({
+  tabId: {
+    type: Number,
+    required: true,
+  },
+});
+
 const modbusStore = useModbusStore();
 
 const started = ref(false);
 const startedOnce = ref(false);
 // const serverError = ref('');
 
-async function startServer() {
-  const config: SerialPortConfiguration = {
-    ...modbusStore.serverConfiguration.common,
-    ...modbusStore.serverConfiguration.rtu,
-  };
+// TODO: Use tab id to identify server
 
-  // console.log(config)
-  console.log('Sending start request');
-  await server.startRtu(config);
-  console.log('Got response!');
-  started.value = true;
-  startedOnce.value = true;
-  await getData();
+// TODO: When user enters page, check if server (with current tab id) is already running
+
+async function startServer() {
+  try {
+    if (modbusStore.serverConfiguration.connectionType === CONNECTION_TYPE.RTU) {
+      const config: ModbusRtuServerConfiguration = {
+        ...modbusStore.serverConfiguration.common,
+        ...modbusStore.serverConfiguration.rtu,
+      };
+
+      await server.startRtu(config);
+    } else {
+      const config: ModbusTcpServerConfiguration = {
+        ...modbusStore.serverConfiguration.common,
+        ...modbusStore.serverConfiguration.tcp,
+      };
+
+      await server.startTcp(config);
+    }
+
+    started.value = true;
+    startedOnce.value = true;
+    await getData();
+  } catch (error) {
+    console.error('Failed to start server');
+    console.error(error);
+  }
 }
 
 async function stopServer() {
   if (started.value) {
-    await server.stopRtu();
+    if (modbusStore.serverConfiguration.connectionType === CONNECTION_TYPE.RTU) {
+      await server.stopRtu();
+    } else {
+      await server.stopTcp();
+    }
     started.value = false;
   }
 }
@@ -184,18 +207,28 @@ const dataCount = ref(100);
 const logs: Ref<ScanLogItem[]> = ref([]);
 const data = ref([]);
 
+const visibleLogs = computed(() => {
+  return logs.value.slice(0, 100);
+});
+
 async function getData() {
   if (!started.value) {
     return;
   }
 
-  console.log(dataType.value);
+  let values;
 
-  let values = await server.getData({
+  const serverDataRequest: ServerDataRequest = {
     type: dataType.value,
     register: dataRegister.value,
     count: dataCount.value,
-  });
+  };
+
+  if (modbusStore.serverConfiguration.connectionType === CONNECTION_TYPE.RTU) {
+    values = await server.getRtuData(serverDataRequest);
+  } else {
+    values = await server.getTcpData(serverDataRequest);
+  }
 
   values = values.map((value: number, index: number) => {
     return {
@@ -208,7 +241,7 @@ async function getData() {
 }
 
 server.onLog((_event, type: string, log: string) => {
-  logs.value.push({
+  logs.value.unshift({
     type,
     text: log,
   });

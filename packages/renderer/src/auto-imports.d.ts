@@ -10,6 +10,7 @@ declare global {
   const IconEpDataAnalysis: typeof import('~icons/ep/data-analysis')['default']
   const IconEpDocument: typeof import('~icons/ep/document')['default']
   const IconEpMouse: typeof import('~icons/ep/mouse')['default']
+  const IconEpPlus: typeof import('~icons/ep/plus')['default']
   const IconEpSearch: typeof import('~icons/ep/search')['default']
   const computed: typeof import('vue')['computed']
   const createApp: typeof import('vue')['createApp']
@@ -66,5 +67,6 @@ declare global {
 // for type re-export
 declare global {
   // @ts-ignore
-  export type { Component, ComponentPublicInstance, ComputedRef, InjectionKey, PropType, Ref, VNode, WritableComputedRef } from 'vue'
+  export type { Component, ComponentPublicInstance, ComputedRef, ExtractDefaultPropTypes, ExtractPropTypes, ExtractPublicPropTypes, InjectionKey, PropType, Ref, VNode, WritableComputedRef } from 'vue'
+  import('vue')
 }

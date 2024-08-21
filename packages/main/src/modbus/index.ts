@@ -1,5 +1,5 @@
 export {modbusTcpRequest, modbusRtuRequest} from './modbusRequest';
-export {ModbusServer} from './modbusServer';
+export {ModbusRtuServer, ModbusTcpServer} from './modbusServer';
 export {ModbusAnalyzer} from './modbusAnalyzer';
 export {DanfossEKC} from './danfossEKC';
 export {RegisterScanner} from './registerScanner';

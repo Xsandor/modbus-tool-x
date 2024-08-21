@@ -1,6 +1,6 @@
-import {app, ipcMain, Menu } from 'electron';
+import {app, ipcMain, Menu} from 'electron';
 import './security-restrictions';
-import { getSerialPorts } from './serialUtils';
+import {getSerialPorts} from './serialUtils';
 import {restoreOrCreateWindow} from '/@/mainWindow';
 import {platform} from 'node:process';
 // import log from 'electron-log'
@@ -29,7 +29,7 @@ const aboutOptions: Electron.AboutPanelOptionsOptions = {
   applicationName: 'Modbus Tool X',
   applicationVersion: app.getVersion(),
   authors: ['Alexander Schmidt'],
-  copyright: '© Alexander Schmidt, 2023',
+  copyright: '© Alexander Schmidt, 2024',
 };
 
 app.setAboutPanelOptions(aboutOptions);
@@ -37,9 +37,7 @@ app.setAboutPanelOptions(aboutOptions);
 const template: Electron.MenuItemConstructorOptions[] = [
   {
     label: 'File',
-    submenu: [
-      { role: 'quit' },
-    ],
+    submenu: [{role: 'quit'}],
   },
   {
     label: 'Edit',
@@ -72,7 +70,8 @@ const template: Electron.MenuItemConstructorOptions[] = [
       {
         role: 'about',
       },
-    ]},
+    ],
+  },
 ];
 
 const menu = Menu.buildFromTemplate(template);
@@ -122,7 +121,7 @@ app
 //     .catch(e => console.error('Failed install extension:', e));
 // }
 
-ipcMain.handle('getComPorts', async (_event) => {
+ipcMain.handle('getComPorts', async _event => {
   const comPorts = await getSerialPorts();
   return comPorts;
 });
@@ -178,13 +177,15 @@ process.on('uncaughtException', function (error) {
 if (!import.meta.env.DEV) {
   app
     .whenReady()
-    .then(() =>
+    .then(async () => {
       /**
        * Here we forced to use `require` since electron doesn't fully support dynamic import in asar archives
        * @see https://github.com/electron/electron/issues/38829
        * Potentially it may be fixed by this https://github.com/electron/electron/pull/37535
        */
-      require('electron-updater').autoUpdater.checkForUpdatesAndNotify(),
-    )
+      const {autoUpdater} = await import('electron-updater');
+      autoUpdater.checkForUpdatesAndNotify();
+      // require('electron-updater').autoUpdater.checkForUpdatesAndNotify(),
+    })
     .catch(e => console.error('Failed check and install updates:', e));
 }

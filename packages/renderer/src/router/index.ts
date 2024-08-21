@@ -6,12 +6,18 @@ import ModbusScanner from '/@/views/ModbusScanner.vue';
 import ModbusAnalyzer from '/@/views/ModbusAnalyzer.vue';
 import DanfossExplorer from '/@/views/DanfossExplorer.vue';
 import RegisterScanner from '/@/views/RegisterScanner.vue';
+import NewTab from '/@/views/NewTab.vue';
 import Settings from '/@/views/Settings.vue';
 
 const routes = [
   {
     path: '/',
-    alias: '/modbusClient',
+    alias: '/newTab',
+    name: 'NewTab',
+    component: NewTab,
+  },
+  {
+    path: '/modbusClient',
     name: 'ModbusClient',
     component: ModbusClient,
   },

@@ -11,6 +11,32 @@ body {
   padding: 0;
 }
 
+::-webkit-scrollbar {
+  width: 18px;
+}
+
+::-webkit-scrollbar-track {
+  border-radius: 2px;
+  background-color: #fafafa;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #d6dee1;
+  border-radius: 20px;
+  border: 6px solid transparent;
+  background-clip: content-box;
+}
+
+html.dark {
+  ::-webkit-scrollbar-track {
+    background-color: #2b2b2b;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: #494949;
+  }
+}
+
 // Layout
 
 .el-header {
@@ -27,7 +53,7 @@ body {
 .el-aside {
   /* background-color: #eee; */
   padding: 10px 10px 20px 10px;
-  margin-top: 10px;
+  // margin-top: 10px;
   /* var(--el-main-padding) */
 
   > .el-card .el-card__body {
@@ -58,6 +84,14 @@ body {
   }
 }
 
+.el-card {
+  margin-bottom: 20px;
+}
+
+.el-text {
+  word-break: normal;
+}
+
 // Form
 
 .el-form-item__content .el-input {
@@ -75,9 +109,9 @@ body {
 
 // Boxes and Cards
 
-.box-card {
-  margin-bottom: 15px;
-}
+// .box-card {
+//   margin-bottom: 15px;
+// }
 
 .card-header {
   display: flex;
@@ -94,8 +128,110 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
   margin-bottom: 18px;
-  background-color: #f5f5f5;
   padding: 8px 5px;
-  border-left: 3px solid #ebebeb;
   border-radius: 4px;
+  background-color: #f5f5f5;
+  border-left: 3px solid #ebebeb;
+}
+
+html.dark .tip {
+  background-color: #2b2b2b;
+  border-left-color: #595959;
+}
+
+// Layout/Tabs
+
+.cet-container {
+  display: flex;
+  max-width: 100vw;
+
+  #app {
+    flex: 1;
+    display: flex;
+
+    > .el-tabs {
+      flex:  1;
+      max-width: calc(100vw - 12px);
+      margin: 0 5px 5px 5px;
+      border-bottom-left-radius: 5px;
+      border-bottom-right-radius: 5px;
+
+      .el-tabs__header {
+        user-select: none; // Prevent user from selecting text while dbl-clicking behind tabs
+      }
+
+      .el-tabs__nav-scroll {
+        height: 39px; // Prevent header from disappearing when there are no tabs open
+      }
+
+      .el-tabs__item {
+        border-right-color: var(--el-border-color);
+        border-left-color: var(--el-border-color);
+        user-select: none;
+      }
+
+      .el-tabs__item.is-closable {
+        padding-left: 15px;
+        padding-right: 5px;
+
+        &.is-active .is-icon-close, &:hover .is-icon-close {
+          opacity: 1;
+        }
+        
+        .is-icon-close {
+          opacity: 0;
+        }
+      }
+
+      .el-tabs__new-tab {
+        margin: 8px 40px 7px 10px !important;
+      }
+
+      .el-tabs__nav-wrap.is-scrollable {
+        padding: 0 25px;
+      }
+
+      .el-tabs__content {
+        // width: 100%;
+        // box-sizing: border-box;
+        // max-height: calc(100vh - 200px);
+        overflow-y: auto;
+      }
+    }
+  }
+}
+
+// Style related to title/menubar (custom-electron-titlebar)
+
+.cet-menubar-menu-container {
+  margin-left: -8px !important;
+  border-radius: 4px !important;
+  border-top-left-radius: 0 !important;
+  padding: 2px !important;
+  background-color: #fff !important;
+  border: 1px solid #ccc!important;
+  backdrop-filter: blur(15px) !important;
+  box-shadow: 0 5px 5px -3px rgba(0, 0, 0, 0.2), 0 8px 10px 1px rgba(0, 0, 0, 0.14), 0 3px 14px 2px rgba(0, 0, 0, 0.12);
+}
+
+.cet-menubar-menu-container .cet-action-menu-item {
+  border-radius: 4px !important;
+  margin: 0 !important;
+}
+
+.cet-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+html.dark {
+  .cet-container, .cet-titlebar {
+    background-color: #1d1e1f;
+  }
+
+  .cet-menubar-menu-container {
+    background: #1d1e1f !important;
+    border: 1px solid #2f2f2f !important;
+  }
 }

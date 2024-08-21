@@ -51,18 +51,31 @@ interface ModbusTask {
 }
 
 interface MbFunction {
+  id: number;
+  name: string;
+  parameters: MbFunctionParameter[];
+}
+
+interface MbFunctionParameter {
   id: string;
   label: string;
   type: string;
   min: number;
   max: number;
   default: number;
+  maxLength?: number;
 }
 
-interface MbOption extends MbFunction {
+interface MbFunctionDefinition {
+  id: number;
+  name: string;
+  description: string;
+  parameters: MbFunctionParameterDefinition[];
+}
+
+interface MbFunctionParameter extends MbFunctionParameterDefinition {
   value: number;
   values?: number[];
-  maxLength?: number;
 }
 
 interface ModbusRequestConfiguration {
@@ -109,6 +122,12 @@ interface ModbusRtuServerConfiguration extends SerialPortConfiguration {
   unitId: number;
 }
 
+interface ModbusTcpServerConfiguration {
+  host: string;
+  port: number;
+  unitId: number;
+}
+
 interface RtuRequestConfiguration extends ModbusRequestConfiguration, SerialPortConfiguration {}
 
 interface SingleModbusRtuRequestConfiguration
@@ -152,12 +171,14 @@ interface ModbusTcpScanConfiguration {
   minUnitId: UnitId;
   maxUnitId: UnitId;
   timeout: number;
+  unitIds: UnitId[];
 }
 
 interface ModbusRtuScanConfiguration extends RtuRequestConfiguration {
   minUnitId: UnitId;
   maxUnitId: UnitId;
   delay: number;
+  unitIds: UnitId[];
 }
 
 interface ScanItem {

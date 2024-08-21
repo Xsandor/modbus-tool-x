@@ -6,66 +6,33 @@
       :lg="9"
       :xl="6"
     >
-      <el-card
-        header="Modbus Logger"
-        class="box-card"
-      >
+      <collapsible-card title="Modbus Logger">
         <el-form
+          v-if="initiated"
           ref="ruleFormRef"
           label-width="120px"
         >
           <el-form-item label="Connection Type">
-            <el-radio-group v-model.number="modbusStore.clientConfiguration.connectionType">
-              <el-radio-button label="0">Modbus RTU</el-radio-button>
-              <el-radio-button label="1">Modbus TCP</el-radio-button>
+            <el-radio-group v-model.number="tabData.connectionType">
+              <el-radio-button :value="0">Modbus RTU</el-radio-button>
+              <el-radio-button :value="1">Modbus TCP</el-radio-button>
             </el-radio-group>
           </el-form-item>
-          <template v-if="modbusStore.clientConfiguration.connectionType === CONNECTION_TYPE.TCP">
-            <tcp-config v-model="modbusStore.clientConfiguration.tcp" />
+          <template v-if="tabData.connectionType === CONNECTION_TYPE.TCP">
+            <tcp-config v-model="tabData.tcp" />
           </template>
           <template v-else>
-            <rtu-config v-model="modbusStore.clientConfiguration.rtu" />
+            <rtu-config v-model="tabData.rtu" />
           </template>
           <el-divider></el-divider>
           <el-form-item label="Unit ID">
             <el-input-number
-              v-model.number="modbusStore.clientConfiguration.common.unitId"
+              v-model.number="tabData.common.unitId"
               :min="0"
               :max="254"
             />
           </el-form-item>
-          <el-form-item label="Modbus Function">
-            <el-select
-              v-model="modbusStore.clientConfiguration.common.mbFunction"
-              placeholder="Modbus function"
-            >
-              <el-option
-                v-for="item in mbFunctions"
-                :key="item.id"
-                :label="item.name"
-                :value="item.id"
-              ></el-option>
-            </el-select>
-          </el-form-item>
-          <el-form-item
-            v-for="parameter in modbusStore.mbOptions"
-            :key="parameter.id"
-            :label="parameter.label"
-          >
-            <el-input-number
-              v-if="parameter.type === 'number'"
-              v-model.number="parameter.value"
-              :min="parameter.min"
-              :max="parameter.max"
-            />
-            <el-input
-              v-else
-              v-model.number="parameter.value"
-              :type="parameter.type"
-              :min="parameter.min"
-              :max="parameter.max"
-            />
-          </el-form-item>
+          <modbus-function-config v-model="tabData.common" />
           <el-form-item>
             <el-button @click="clearTasks">Clear tasks</el-button>
             <el-button
@@ -114,22 +81,24 @@
             />
           </el-form-item>
           <el-form-item>
+            <el-button @click="clearLog">Clear log</el-button>
             <el-button
               type="primary"
+              :disabled="inProgress"
               @click="performRequest()"
             >
               Execute
             </el-button>
           </el-form-item>
         </el-form>
-      </el-card>
+      </collapsible-card>
     </el-col>
     <el-col
       :span="24"
       :md="24"
       :lg="15"
     >
-      <el-card>
+      <el-card shadow="never">
         <template #header>
           <div class="card-header">
             <span>Result</span>
@@ -148,7 +117,7 @@
           title="Error"
           :sub-title="loggerError"
         ></el-result>
-        <template v-else>
+        <template v-if="started">
           <el-descriptions
             :column="1"
             border
@@ -202,6 +171,10 @@
             <el-table-column prop="executionTime" label="Response" />
           </el-table> -->
         </template>
+        <el-empty
+          v-else
+          description="Nothing to see here yet"
+        />
       </el-card>
     </el-col>
   </el-row>
@@ -209,45 +182,57 @@
 
 <script lang="tsx" setup>
 import {logger} from '#preload';
+import {useTabsStore} from '/@/stores/useTabs';
 import useCSV from '/@/components/useCSV';
-import {CONNECTION_TYPE, mbFunctions, useModbusStore} from '/@/stores/useModbus';
+import {CONNECTION_TYPE, useModbusStore} from '/@/stores/useModbus';
+import {clone} from '../helpers/utilities';
 
 const {saveCSV} = useCSV();
 // import useToast from '/@/components/useToast'
 
 const modbusStore = useModbusStore();
-// console.log(ipcRenderer)
+const {getTabDataById, setTabDataById} = useTabsStore();
+
+const props = defineProps({
+  tabId: {
+    type: Number,
+    required: true,
+  },
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const tabData: Ref<any> = ref({});
 
 const columns = [
   {
     key: 'id',
     dataKey: 'id',
-    title: 'ID',
+    title: '#',
     width: 50,
   },
   {
     key: 'unitId',
     dataKey: 'unitId',
     title: 'Unit ID',
-    width: 100,
+    width: 80,
   },
   {
     key: 'mbFunction',
     dataKey: 'mbFunction',
     title: 'Function',
-    width: 100,
+    width: 80,
   },
   {
     key: 'mbAddr',
     dataKey: 'mbAddr',
     title: 'Register',
-    width: 100,
+    width: 80,
   },
   {
     key: 'result',
     dataKey: 'result',
     title: 'Values',
-    width: 150,
+    width: 200,
     cellRenderer: ({cellData: result}: {cellData: {value: number}[]}) => (
       <div class="el-table-v2__cell-text">{(result || []).map(i => i.value).join(', ')}</div>
     ),
@@ -256,7 +241,7 @@ const columns = [
     key: 'errorText',
     dataKey: 'errorText',
     title: 'Error',
-    width: 100,
+    width: 200,
   },
   {
     key: 'executionTime',
@@ -268,6 +253,9 @@ const columns = [
     ),
   },
 ];
+
+const started = ref(false);
+const inProgress = ref(false);
 
 const results: Ref<GenericObject[]> = ref([]);
 
@@ -315,6 +303,7 @@ const ruleFormRef = ref();
 // });
 
 function clearLog() {
+  started.value = false;
   loggerError.value = '';
   results.value = [];
   stats.value = {
@@ -334,14 +323,17 @@ const tasks: Ref<ModbusTask[]> = ref([]);
 
 function addTask() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const options = modbusStore.mbOptions.reduce((acc: {[key: string]: any}, item) => {
-    acc[item.id] = item.value;
-    return acc;
-  }, {});
+  const options = tabData.value.common.mbFunctionParameters.reduce(
+    (acc: GenericObject, item: MbFunctionParameter) => {
+      acc[item.id] = item.value;
+      return acc;
+    },
+    {},
+  );
 
   const task: ModbusTask = {
-    unitId: modbusStore.clientConfiguration.common.unitId,
-    mbFunction: modbusStore.clientConfiguration.common.mbFunction,
+    unitId: tabData.value.common.unitId,
+    mbFunction: tabData.value.common.mbFunction,
     mbOptions: {
       ...options,
     },
@@ -408,26 +400,29 @@ const performRequest = async () => {
   // })
   // return
   // console.log('Will perform modbus request')
-  if (modbusStore.clientConfiguration.connectionType === CONNECTION_TYPE.TCP) {
+  if (tabData.value.connectionType === CONNECTION_TYPE.TCP) {
     // console.log('Modbus TCP')
     const configuration = {
-      ...modbusStore.clientConfiguration.tcp,
+      ...tabData.value.tcp,
       tasks: tasks.value.map(i => JSON.parse(JSON.stringify(i))),
     };
 
-    // console.log(configuration)
+    // console.log(configuration);
     const config: TcpLoggerConfiguration = {
       ...configuration,
       count: requestCount.value,
       delay: requestDelay.value,
     };
     // console.log('Starting logger');
-    logger.startTcp(config);
-  } else if (modbusStore.clientConfiguration.connectionType === CONNECTION_TYPE.RTU) {
+    started.value = true;
+    inProgress.value = true;
+    await logger.startTcp(config);
+    inProgress.value = false;
+  } else if (tabData.value.connectionType === CONNECTION_TYPE.RTU) {
     // console.log('Modbus RTU')
     // console.log(tasks.value)
     const configuration = {
-      ...modbusStore.clientConfiguration.rtu,
+      ...tabData.value.rtu,
       tasks: tasks.value.map(i => JSON.parse(JSON.stringify(i))),
     };
 
@@ -436,9 +431,12 @@ const performRequest = async () => {
       count: requestCount.value,
       delay: requestDelay.value,
     };
-    // console.log(config)
+    // console.log(config);
     console.log('Starting logger');
+    started.value = true;
+    inProgress.value = true;
     const {_result, error} = await logger.startRtu(config);
+    inProgress.value = false;
     if (error) {
       loggerError.value = error;
     }
@@ -454,15 +452,29 @@ function formatMbOptions(mbOptions: GenericObject[]) {
 
   return JSON.stringify(mbOptions);
 }
+
+const initiated = ref(false);
+
+onMounted(() => {
+  initiated.value = false;
+  tabData.value = getTabDataById(props.tabId);
+
+  if (!tabData.value) {
+    const defaultValues = clone(modbusStore.clientConfiguration);
+    tabData.value = setTabDataById(props.tabId, defaultValues);
+  }
+
+  initiated.value = true;
+});
 </script>
 
 <style>
 .logger-stats-table td:first-child {
-  width: 185px;
+  width: 150px;
 }
 
 .logger-stats-table .el-progress__text {
-  width: 100px;
+  width: 120px;
   text-align: center;
 }
 </style>

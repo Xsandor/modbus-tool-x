@@ -1,4 +1,4 @@
-import {app, BrowserWindow, ipcMain, dialog} from 'electron';
+import {app, BrowserWindow, ipcMain, dialog, nativeTheme} from 'electron';
 import {join, resolve} from 'node:path';
 import {throttle} from 'underscore';
 import {
@@ -9,31 +9,40 @@ import {
   ModbusScannerRTU,
   ModbusScannerTCP,
   ModbusAnalyzer,
+  ModbusRtuServer,
+  ModbusTcpServer,
   RegisterScanner,
   DanfossEKC,
 } from './modbus';
-import {ModbusServer} from './modbus';
 import {getNetworkInfo} from './networkUtils';
 import {writeFile} from 'node:fs';
-import Store from 'electron-store';
+// import Store from 'electron-store';
 import {sleep} from './modbus/utilities';
+import {setupTitlebar, attachTitlebarToWindow} from 'custom-electron-titlebar/main';
 
-const store = new Store();
+// const store = new Store();
+setupTitlebar();
 
 async function createWindow() {
   const browserWindow = new BrowserWindow({
     show: false, // Use the 'ready-to-show' event to show the instantiated BrowserWindow.
     width: 1640,
     height: 1080,
+    //frame: false, // needed if process.versions.electron < 14
+    titleBarStyle: 'hidden',
+    /* You can use *titleBarOverlay: true* to use the original Windows controls */
+    titleBarOverlay: true,
     icon: 'packages/main/src/icon.ico',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true, // Sandbox disabled because the demo of preload script depend on the Node.js api
+      sandbox: false, // Sandbox disabled because the demo of preload script depend on the Node.js api
       webviewTag: false, // The webview tag is not recommended. Consider alternatives like an iframe or Electron's BrowserView. @see https://www.electronjs.org/docs/latest/api/webview-tag#warning
       preload: join(app.getAppPath(), 'packages/preload/dist/index.cjs'),
     },
   });
+
+  attachTitlebarToWindow(browserWindow);
 
   /**
    * If the 'show' property of the BrowserWindow's constructor is omitted from the initialization options,
@@ -47,7 +56,7 @@ async function createWindow() {
     browserWindow?.show();
 
     if (import.meta.env.DEV) {
-      // browserWindow?.webContents.openDevTools();
+      browserWindow?.webContents.openDevTools();
     }
   });
 
@@ -72,14 +81,17 @@ async function createWindow() {
     await browserWindow.loadFile(resolve(__dirname, '../../renderer/dist/index.html'));
   }
 
-  // IPC listener
-  ipcMain.on('electron-store-get', async (event, val) => {
-    event.returnValue = store.get(val);
-  });
+  // ############################ Local File Storage  ############################
 
-  ipcMain.on('electron-store-set', async (_event, key, val) => {
-    store.set(key, val);
-  });
+  // ipcMain.on('electron-store-get', async (event, val) => {
+  //   event.returnValue = store.get(val);
+  // });
+
+  // ipcMain.on('electron-store-set', async (_event, key, val) => {
+  //   store.set(key, val);
+  // });
+
+  // ############################ Saving CSV ############################
 
   ipcMain.handle('saveCSV', async (_event, data, source: null | string) => {
     let defaultFileName = '';
@@ -105,6 +117,8 @@ async function createWindow() {
     }
   });
 
+  // ############################ Modbus Logger ############################
+
   let logger: ModbusLoggerRTU | ModbusLoggerTCP | null = null;
 
   ipcMain.handle('startTcpLogger', async (_event, configuration) => {
@@ -128,7 +142,7 @@ async function createWindow() {
         result: 'started',
         error: null,
       };
-    } catch (error) {
+    } catch (_error) {
       return {
         result: 'error',
         error: 'Unexpected error, check you settings',
@@ -157,7 +171,7 @@ async function createWindow() {
         result: 'started',
         error: null,
       };
-    } catch (error) {
+    } catch (_error) {
       return {
         result: 'error',
         error: 'Port already in use',
@@ -196,6 +210,8 @@ async function createWindow() {
       };
     }
   });
+
+  // ############################ Modbus Scanner ############################
 
   let scanner: ModbusScannerTCP | ModbusScannerRTU | null = null;
 
@@ -238,7 +254,7 @@ async function createWindow() {
         result: 'started',
         error: null,
       };
-    } catch (error) {
+    } catch (_error) {
       return {
         result: 'error',
         error: 'Unexpected error, check your settings.',
@@ -293,6 +309,8 @@ async function createWindow() {
     }
   });
 
+  // ############################ Register Scanner ############################
+
   let registerScanner: null | RegisterScanner = null;
 
   ipcMain.handle('RegisterScanner:start', async (_event, serialPortConfiguration, unitId) => {
@@ -322,17 +340,30 @@ async function createWindow() {
     registerScanner.start();
   });
 
+  // ############################ Danfoss EKC ############################
+
   let danfossEkc: null | DanfossEKC = null;
 
-  ipcMain.handle('EKC:initiate', async (_event, serialPortConfiguration, unitId) => {
+  ipcMain.handle('EKC:disconnect', async () => {
     if (danfossEkc) {
-      console.log('Danfoss EKC device already initiated, closing...');
+      console.log('Closing connection to Danfoss EKC...');
       await danfossEkc.close();
       danfossEkc = null;
       await sleep(100);
     }
+
+    return;
+  });
+
+  ipcMain.handle('EKC:initiate', async (_event, serialPortConfiguration, unitId, useCache) => {
+    if (danfossEkc) {
+      console.log('Danfoss EKC device already initiated, closing...');
+      await danfossEkc.close();
+      danfossEkc = null;
+      await sleep(250);
+    }
     console.log('Initiating Danfoss EKC device');
-    danfossEkc = new DanfossEKC(serialPortConfiguration, unitId);
+    danfossEkc = new DanfossEKC(serialPortConfiguration, unitId, useCache);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sendStatusToWeb = throttle((status: any) => {
@@ -366,6 +397,8 @@ async function createWindow() {
     return await danfossEkc.writeParameter(pnu, value);
   });
 
+  // ############################ Modbus Analyzer ############################
+
   let analyzer: ModbusAnalyzer | null = null;
 
   ipcMain.handle('startRtuAnalyzer', async (_event, options) => {
@@ -396,7 +429,7 @@ async function createWindow() {
         result: 'started',
         error: null,
       };
-    } catch (error) {
+    } catch (_error) {
       console.log('Error occurred!');
       return {
         result: 'error',
@@ -413,10 +446,12 @@ async function createWindow() {
     }
   });
 
-  let server: null | ModbusServer = null;
+  // ############################ Modbus Server ############################
+
+  let rtuServer: null | ModbusRtuServer = null;
 
   ipcMain.handle('startRtuServer', async (_event, config: ModbusRtuServerConfiguration) => {
-    console.log('Starting Modbus server');
+    console.log('Starting Modbus RTU Server');
     // const child = utilityProcess
     //   .fork(path.join(__dirname, '../../utilities/dist/index.cjs'))
     //   .on('spawn', () => {
@@ -424,18 +459,18 @@ async function createWindow() {
     //     child.postMessage({request: 'startRtuServer', config});
     //   })
     //   .on('exit', _code => console.log('existing utilityProcess'));
-    if (server) {
+    if (rtuServer) {
       console.log('Server already running, stopping...');
-      await server.stop();
-      server = null;
+      await rtuServer.stop();
+      rtuServer = null;
       await sleep(1000);
       console.log('Server stopped, starting new one...');
     }
 
-    server = new ModbusServer(config);
+    rtuServer = new ModbusRtuServer(config);
 
-    server.on('log', (type, log) => {
-      console.log('Got log from ModbusServer');
+    rtuServer.on('log', (type, log) => {
+      // console.log('Got log from Modbus RTU Server');
       browserWindow.webContents.send('server:log', type, log);
     });
   });
@@ -443,18 +478,56 @@ async function createWindow() {
   ipcMain.handle('stopRtuServer', async _event => {
     console.log('Stopping Modbus server');
 
-    server?.stop();
+    rtuServer?.stop();
 
-    server = null;
+    rtuServer = null;
   });
 
-  ipcMain.handle('getServerData', async (_event, {type, register, count}: ServerDataRequest) => {
-    if (!server) return;
+  ipcMain.handle('getRtuServerData', async (_event, {type, register, count}: ServerDataRequest) => {
+    if (!rtuServer) return;
 
-    console.log('Fetching data from Modbus server');
+    console.log('Fetching data from Modbus RTU Server');
 
-    return server.getData(type, register, count);
+    return rtuServer.getData(type, register, count);
   });
+
+  let tcpServer: null | ModbusTcpServer = null;
+
+  ipcMain.handle('startTcpServer', async (_event, config: ModbusTcpServerConfiguration) => {
+    console.log('Starting Modbus TCP server');
+    if (tcpServer) {
+      console.log('Server already running, stopping...');
+      await tcpServer.stop();
+      tcpServer = null;
+      await sleep(1000);
+      console.log('Server stopped, starting new one...');
+    }
+
+    tcpServer = new ModbusTcpServer(config);
+
+    tcpServer.on('log', (type, log) => {
+      // console.log('Got log from Modbus TCP Server');
+      browserWindow.webContents.send('server:log', type, log);
+    });
+  });
+
+  ipcMain.handle('stopTcpServer', async _event => {
+    console.log('Stopping Modbus TCP Server');
+
+    tcpServer?.stop();
+
+    tcpServer = null;
+  });
+
+  ipcMain.handle('getTcpServerData', async (_event, {type, register, count}: ServerDataRequest) => {
+    if (!tcpServer) return;
+
+    console.log('Fetching data from Modbus Server');
+
+    return tcpServer.getData(type, register, count);
+  });
+
+  // ############################ Network Info ############################
 
   const networkInfo = await getNetworkInfo();
   browserWindow.webContents.send('network:info', networkInfo);
@@ -466,6 +539,19 @@ async function createWindow() {
 
   return browserWindow;
 }
+
+ipcMain.handle('dark-mode:toggle', () => {
+  if (nativeTheme.shouldUseDarkColors) {
+    nativeTheme.themeSource = 'dark';
+  } else {
+    nativeTheme.themeSource = 'dark';
+  }
+  return nativeTheme.shouldUseDarkColors;
+});
+
+ipcMain.handle('dark-mode:system', () => {
+  nativeTheme.themeSource = 'system';
+});
 
 /**
  * Restore an existing BrowserWindow or Create a new BrowserWindow.

@@ -197,6 +197,8 @@ export async function modbusRequest(
           }
 
           // log.debug(result);
+        } else {
+          result = {text: result.data};
         }
 
         break;
@@ -240,7 +242,7 @@ export async function modbusRequest(
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    log.error('EXCEPTION!!');
+    // log.error('EXCEPTION!!');
     log.error(err);
 
     if (!err.message && !(err instanceof Error)) {
@@ -254,7 +256,7 @@ export async function modbusRequest(
       errorText = 'Timeout: No response from device';
     } else {
       errorCode = ERROR_CODE_UNKNOWN;
-      errorText = 'Unknown error';
+      errorText = err.message || 'Unknown error';
     }
   }
 
@@ -281,7 +283,7 @@ export async function modbusRtuRequest(configuration: SingleModbusRtuRequestConf
     log.info('Port opened, sending request');
     result = await modbusRequest(client, unitId, timeout, mbFunction, mbOptions);
     log.info('Got response!');
-  } catch (error) {
+  } catch (_error) {
     if (client.isOpen) client.close(() => null);
     return {
       result: null,
@@ -315,7 +317,7 @@ export async function modbusTcpRequest(
     // console.log.info('Modbus TCP connected!')
 
     result = await modbusRequest(client, unitId, timeout, mbFunction, mbOptions);
-  } catch (error) {
+  } catch (_error) {
     if (client.isOpen) client.close(() => null);
     return {
       result: null,

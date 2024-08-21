@@ -1,5 +1,8 @@
 <template>
-  <el-card :header="`Logs (${log.length})`">
+  <el-card
+    shadow="never"
+    :header="`Logs (${log.length})`"
+  >
     <div
       v-if="log.length"
       class="log-container"

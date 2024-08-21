@@ -55,14 +55,14 @@ export function getNetworkInfo(): Promise<NetworkInfo> {
         activeInterface = interfaceWithIp;
       }
 
-      console.log(activeInterface);
+      // console.log(activeInterface);
 
       const iface = activeInterface.name;
       const ipAddress = activeInterface.ip_address;
       const netmask = activeInterface.netmask;
       const gateway = activeInterface.gateway_ip;
 
-      console.log(ipAddress, netmask);
+      // console.log(ipAddress, netmask);
 
       if (!netmask) {
         return resolve({
@@ -77,7 +77,7 @@ export function getNetworkInfo(): Promise<NetworkInfo> {
 
       const subnet = ip.subnet(ipAddress, netmask);
 
-      console.log(subnet);
+      // console.log(subnet);
 
       const firstIpOnSubnet = subnet.firstAddress;
       const lastIpOnSubnet = subnet.lastAddress;

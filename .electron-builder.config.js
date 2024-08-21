@@ -12,30 +12,30 @@ module.exports = async function () {
   const {getVersion} = await import('./version/getVersion.mjs');
 
   return {
-    appId: "com.modbus-tool-x.app",
-    productName: "Modbus Tool X",
-    copyright: "Copyright © 2023 ${author}",
+    appId: 'com.modbus-tool-x.app',
+    productName: 'Modbus Tool X',
+    copyright: 'Copyright © 2024 ${author}',
     directories: {
       output: 'dist',
       buildResources: 'buildResources',
     },
     nsis: {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "shortcutName": "Modbus Tool X"
+      oneClick: false,
+      perMachine: false,
+      allowToChangeInstallationDirectory: true,
+      shortcutName: 'Modbus Tool X',
     },
     win: {
-        "target": "nsis",
-        "icon": "packages/main/src/icon.ico"
+      target: 'nsis',
+      icon: 'packages/main/src/icon.ico',
     },
     publish: [
-        {
-          "provider": "generic",
-          "url": "https://download.karlborgselkontroll.se:8443/update/${os}${arch}/",
-          "channel": "latest",
-          "useMultipleRangeRequest": false
-        }
+      {
+        provider: 'generic',
+        url: 'https://download.karlborgselkontroll.se:8443/update/${os}${arch}/',
+        channel: 'latest',
+        useMultipleRangeRequest: false,
+      },
     ],
     files: ['packages/**/dist/**'],
     extraMetadata: {

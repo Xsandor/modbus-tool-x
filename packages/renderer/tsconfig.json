@@ -8,6 +8,7 @@
     "strict": true,
     "isolatedModules": true,
     "jsx": "preserve",
+    "jsxImportSource": "vue",
     "types": ["node", "element-plus/global"],
     "baseUrl": ".",
     "paths": {
