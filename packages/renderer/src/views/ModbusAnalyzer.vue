@@ -1,3 +1,163 @@
+<template>
+  <el-row :gutter="20">
+    <el-col
+      :span="24"
+      :sm="12"
+      :md="10"
+      :lg="9"
+      :xl="6"
+    >
+      <collapsible-card title="Modbus Analyzer">
+        <el-form
+          ref="ruleFormRef"
+          label-width="120px"
+        >
+          <rtu-config v-model="modbusStore.analyzerConfiguration.rtu" />
+          <el-form-item>
+            <el-button @click="clearLog">Clear</el-button>
+            <el-button
+              v-if="started"
+              type="danger"
+              @click="stopAnalyzer"
+            >
+              Stop
+            </el-button>
+            <el-button
+              v-else
+              type="primary"
+              :disabled="starting"
+              @click="startAnalyzer"
+            >
+              Start
+            </el-button>
+          </el-form-item>
+        </el-form>
+      </collapsible-card>
+    </el-col>
+    <el-col
+      :span="24"
+      :sm="12"
+      :md="14"
+      :lg="15"
+      :xl="18"
+    >
+      <el-card shadow="never">
+        <template #header>
+          <div class="card-header">
+            <span>Result</span>
+            <el-button
+              v-if="dataRows.length"
+              :size="'small'"
+              @click="exportLog"
+            >
+              Export <el-icon class="el-icon--right"><i-ep-download /></el-icon>
+            </el-button>
+          </div>
+        </template>
+        <el-result
+          v-if="analyzerError"
+          icon="error"
+          title="Error"
+          :sub-title="analyzerError"
+        ></el-result>
+        <template v-else>
+          <el-form-item label="Modbus Function">
+            <el-select
+              v-model="filter.mbFunction"
+              placeholder="Modbus function"
+            >
+              <el-option
+                v-for="item in modbusFunctionOptions"
+                :key="item.id"
+                :label="item.name"
+                :value="item.id"
+              ></el-option>
+            </el-select>
+          </el-form-item>
+          <el-form-item label="Show raw data">
+            <el-switch v-model="showColumns.buffer" />
+          </el-form-item>
+          <el-table
+            v-loading="starting"
+            :data="filteredLog"
+            :border="true"
+            :empty-text="started ? 'Awaiting data' : 'Please start analyzer'"
+            :row-class-name="dataRowClassName"
+            element-loading-text="Opening serial port..."
+          >
+            <el-table-column
+              prop="timestamp"
+              label="Timestamp"
+              width="130"
+            />
+            <el-table-column
+              prop="crc"
+              label="CRC"
+              width="60"
+              align="center"
+            >
+              <template #default="scope">
+                <el-icon>
+                  <el-icon-circle-check
+                    v-if="scope.row.crc"
+                    color="green"
+                  ></el-icon-circle-check>
+                  <el-icon-circle-close
+                    v-else
+                    color="red"
+                  ></el-icon-circle-close>
+                </el-icon>
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="type"
+              label="Type"
+              width="60"
+              align="center"
+            >
+              <template #default="scope">
+                <el-icon>
+                  <el-icon-arrow-right-bold
+                    v-if="scope.row.type === 1"
+                    color="orange"
+                  ></el-icon-arrow-right-bold>
+                  <el-icon-arrow-left-bold
+                    v-if="scope.row.type === 2"
+                    color="green"
+                  ></el-icon-arrow-left-bold>
+                </el-icon>
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="address"
+              label="Address"
+              width="90"
+            />
+            <el-table-column
+              prop="mbFunction"
+              label="Function"
+              width="200"
+            >
+              <template #default="scope">
+                {{ modbusStore.formatFunctionCode(scope.row.mbFunction) }}
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="data"
+              label="Data"
+            />
+            <el-table-column
+              v-if="showColumns.buffer"
+              prop="buffer"
+              label="Raw"
+            />
+          </el-table>
+        </template>
+      </el-card>
+    </el-col>
+  </el-row>
+</template>
+
 <script lang="ts" setup>
 import {analyzer} from '#preload';
 import {MODBUS_FUNCTIONS, useModbusStore} from '/@/stores/useModbus';
@@ -153,163 +313,5 @@ onBeforeUnmount(() => {
   stopAnalyzer();
 });
 </script>
-
-<template>
-  <el-row :gutter="20">
-    <el-col
-      :span="24"
-      :md="24"
-      :lg="8"
-      :xl="5"
-    >
-      <collapsible-card title="Modbus Analyzer">
-        <el-form
-          ref="ruleFormRef"
-          label-width="120px"
-        >
-          <rtu-config v-model="modbusStore.analyzerConfiguration.rtu" />
-          <el-form-item>
-            <el-button @click="clearLog">Clear</el-button>
-            <el-button
-              v-if="started"
-              type="danger"
-              @click="stopAnalyzer"
-            >
-              Stop
-            </el-button>
-            <el-button
-              v-else
-              type="primary"
-              :disabled="starting"
-              @click="startAnalyzer"
-            >
-              Start
-            </el-button>
-          </el-form-item>
-        </el-form>
-      </collapsible-card>
-    </el-col>
-    <el-col
-      :span="24"
-      :md="24"
-      :lg="16"
-      :xl="19"
-    >
-      <el-card shadow="never">
-        <template #header>
-          <div class="card-header">
-            <span>Result</span>
-            <el-button
-              v-if="dataRows.length"
-              :size="'small'"
-              @click="exportLog"
-            >
-              Export <el-icon class="el-icon--right"><i-ep-download /></el-icon>
-            </el-button>
-          </div>
-        </template>
-        <el-result
-          v-if="analyzerError"
-          icon="error"
-          title="Error"
-          :sub-title="analyzerError"
-        ></el-result>
-        <template v-else>
-          <el-form-item label="Modbus Function">
-            <el-select
-              v-model="filter.mbFunction"
-              placeholder="Modbus function"
-            >
-              <el-option
-                v-for="item in modbusFunctionOptions"
-                :key="item.id"
-                :label="item.name"
-                :value="item.id"
-              ></el-option>
-            </el-select>
-          </el-form-item>
-          <el-form-item label="Show raw data">
-            <el-switch v-model="showColumns.buffer" />
-          </el-form-item>
-          <el-table
-            v-loading="starting"
-            :data="filteredLog"
-            :border="true"
-            :empty-text="started ? 'Awaiting data' : 'Please start analyzer'"
-            :row-class-name="dataRowClassName"
-            element-loading-text="Opening serial port..."
-          >
-            <el-table-column
-              prop="timestamp"
-              label="Timestamp"
-              width="130"
-            />
-            <el-table-column
-              prop="crc"
-              label="CRC"
-              width="60"
-              align="center"
-            >
-              <template #default="scope">
-                <el-icon>
-                  <el-icon-circle-check
-                    v-if="scope.row.crc"
-                    color="green"
-                  ></el-icon-circle-check>
-                  <el-icon-circle-close
-                    v-else
-                    color="red"
-                  ></el-icon-circle-close>
-                </el-icon>
-              </template>
-            </el-table-column>
-            <el-table-column
-              prop="type"
-              label="Type"
-              width="60"
-              align="center"
-            >
-              <template #default="scope">
-                <el-icon>
-                  <el-icon-arrow-right-bold
-                    v-if="scope.row.type === 1"
-                    color="orange"
-                  ></el-icon-arrow-right-bold>
-                  <el-icon-arrow-left-bold
-                    v-if="scope.row.type === 2"
-                    color="green"
-                  ></el-icon-arrow-left-bold>
-                </el-icon>
-              </template>
-            </el-table-column>
-            <el-table-column
-              prop="address"
-              label="Address"
-              width="90"
-            />
-            <el-table-column
-              prop="mbFunction"
-              label="Function"
-              width="200"
-            >
-              <template #default="scope">
-                {{ modbusStore.formatFunctionCode(scope.row.mbFunction) }}
-              </template>
-            </el-table-column>
-            <el-table-column
-              prop="data"
-              label="Data"
-            />
-            <el-table-column
-              v-if="showColumns.buffer"
-              prop="buffer"
-              label="Raw"
-            />
-          </el-table>
-        </template>
-      </el-card>
-    </el-col>
-  </el-row>
-</template>
 
 <style></style>

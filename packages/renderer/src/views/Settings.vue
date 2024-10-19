@@ -15,10 +15,10 @@ const APP_VERSION = import.meta.env.VITE_APP_VERSION;
         header="Settings"
         class="box-card"
       >
-        <p>
+        <el-text>
           <!-- Example how to inject current app version to UI -->
           App version: {{ APP_VERSION }}
-        </p>
+        </el-text>
       </el-card>
     </el-col>
   </el-row>

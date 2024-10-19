@@ -2,7 +2,8 @@
   <el-row :gutter="20">
     <el-col
       :span="24"
-      :md="12"
+      :sm="12"
+      :md="10"
       :lg="9"
       :xl="6"
     >
@@ -50,7 +51,8 @@
     </el-col>
     <el-col
       :span="24"
-      :md="12"
+      :sm="12"
+      :md="14"
       :lg="15"
       :xl="18"
     >

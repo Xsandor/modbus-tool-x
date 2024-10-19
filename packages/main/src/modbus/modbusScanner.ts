@@ -46,6 +46,7 @@ class ModbusScanner extends EventEmitter {
   stateList: string[];
   scanStartedAt: undefined | [number, number];
   foundUnits: number;
+  abort: boolean = false;
 
   constructor() {
     super();
@@ -53,6 +54,10 @@ class ModbusScanner extends EventEmitter {
     this.stateList = [];
     this.itemsScanned = 0;
     this.foundUnits = 0;
+  }
+
+  stop() {
+    this.abort = true;
   }
 
   public setScanItemState(scanItem: ScanItem, state: ScanState) {
@@ -71,10 +76,12 @@ class ModbusScanner extends EventEmitter {
     this.emit('status', this.scanList);
   }
 
-  protected reportProgress() {
+  protected reportProgress(aborted = false) {
     let progress = 0;
 
-    if (this.itemsScanned && this.scanList.length) {
+    if (aborted) {
+      progress = 100;
+    } else if (this.itemsScanned && this.scanList.length) {
       progress = (this.itemsScanned / this.scanList.length) * 100;
     }
 
@@ -178,6 +185,10 @@ export class ModbusScannerTCP extends ModbusScanner {
     this.reportProgress();
 
     const searchSlaves = async (scanItem: ScanItem) => {
+      if (this.abort) {
+        return;
+      }
+
       const client = new ModbusRTU();
       client.setTimeout(timeout);
 
@@ -228,7 +239,12 @@ export class ModbusScannerTCP extends ModbusScanner {
         const list = unitIds.length ? unitIds : range(minUnitId, maxUnitId + 1);
 
         for (const id of list) {
+          if (this.abort) {
+            break;
+          }
+
           const unitOK = await checkUnitId(id);
+
           if (unitOK) {
             break;
           }
@@ -253,7 +269,7 @@ export class ModbusScannerTCP extends ModbusScanner {
       } finally {
         this.itemsScanned++;
         this.reportStatus();
-        this.reportProgress();
+        this.reportProgress(this.abort);
       }
     };
 
@@ -381,6 +397,9 @@ export class ModbusScannerRTU extends ModbusScanner {
         };
 
         for (const scanItem of this.scanList) {
+          if (this.abort) {
+            break;
+          }
           await checkUnitId(scanItem);
 
           this.reportStatus();
@@ -423,6 +442,9 @@ export class ModbusScannerRTU extends ModbusScanner {
 
         // Loop over all units that we received a versionNumber from and device model from them
         for (const scanItem of this.scanList.filter(item => item.meta.softwareVersion)) {
+          if (this.abort) {
+            break;
+          }
           this.setScanItemState(scanItem, ScanState.Scanning);
           await checkDanfossModel(scanItem);
 
@@ -442,7 +464,7 @@ export class ModbusScannerRTU extends ModbusScanner {
     await searchSlaves();
     // log.info('Done!');
     this.log('info', 'Scan complete!');
-    this.reportProgress();
+    this.reportProgress(this.abort);
   }
 
   private generateScanList(minUnitId: number, maxUnitId: number, unitIds: number[]) {

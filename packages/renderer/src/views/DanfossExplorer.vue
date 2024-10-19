@@ -2,8 +2,9 @@
   <el-row :gutter="20">
     <el-col
       :span="24"
-      :md="12"
-      :lg="8"
+      :sm="12"
+      :md="10"
+      :lg="9"
       :xl="6"
     >
       <collapsible-card title="Danfoss Explorer">
@@ -78,7 +79,7 @@
     </el-col>
     <el-col
       :span="24"
-      :lg="16"
+      :lg="15"
       :xl="18"
     >
       <el-card
@@ -258,9 +259,11 @@ import {ElInputNumber, ElMessage, ElMessageBox, type TabPaneName} from 'element-
 import 'element-plus/es/components/message/style/css';
 import 'element-plus/es/components/message-box/style/css';
 import 'element-plus/es/components/input-number/style/css';
+import useToast from '/@/components/useToast';
 import {useModbusStore} from '/@/stores/useModbus';
 
 const modbusStore = useModbusStore();
+const {toast} = useToast();
 
 const openTab = ref();
 
@@ -348,13 +351,11 @@ async function changeValue(parameter: any) {
         const scaledValue = Math.round(parseFloat(newValue) / 10 ** parameter.exp);
         // console.log(`Parsed value from user: ${scaledValue}`);
         if (scaledValue > parameter.max || scaledValue < parameter.min) {
-          ElMessage({
-            offset: 40,
-            type: 'error',
-            message: `Illegal value
-  Supplied: ${newValue}
-  Valid range: ${parameter.min * 10 ** parameter.exp} to ${parameter.max * 10 ** parameter.exp}`,
-          });
+          const message = `Illegal value
+Supplied: ${newValue}
+Valid range: ${parameter.min * 10 ** parameter.exp} to ${parameter.max * 10 ** parameter.exp}`;
+
+          toast(message, 'error');
           return console.warn('User is trying to write an illegal value!');
         }
 
@@ -366,17 +367,9 @@ async function changeValue(parameter: any) {
           await danfossEkc.writeParameter(parameter.pnu, scaledValue);
           done();
           instance.confirmButtonLoading = false;
-          ElMessage({
-            offset: 40,
-            type: 'success',
-            message: `Parameter changed successfully`,
-          });
+          toast(`Parameter changed successfully`, 'success');
         } catch (_error) {
-          ElMessage({
-            offset: 40,
-            type: 'error',
-            message: 'Failed to change parameter',
-          });
+          toast('Failed to change parameter', 'error');
           done();
           instance.confirmButtonLoading = false;
         }

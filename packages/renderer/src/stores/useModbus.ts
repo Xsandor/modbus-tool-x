@@ -379,8 +379,7 @@ Holding registers are typically writable and are composed of 2 bytes (16 bits) a
   {
     id: 7,
     name: MODBUS_FUNCTIONS[7],
-    description: `With this command, you can read eight Exception Status outputs in a remote
-    device.`,
+    description: `With this command, you can read eight Exception Status outputs in a remote device.`,
     parameters: [],
   },
   // {

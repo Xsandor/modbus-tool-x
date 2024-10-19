@@ -2,8 +2,9 @@
   <el-row :gutter="20">
     <el-col
       :span="24"
-      :md="18"
-      :lg="11"
+      :sm="12"
+      :md="10"
+      :lg="9"
       :xl="6"
     >
       <collapsible-card title="Modbus Server">
@@ -59,9 +60,10 @@
     </el-col>
     <el-col
       :span="24"
-      :md="18"
-      :lg="13"
-      :xl="6"
+      :sm="12"
+      :md="14"
+      :lg="15"
+      :xl="18"
     >
       <el-card
         shadow="never"
@@ -121,7 +123,7 @@
           title="Start server"
         >
           <template #sub-title>
-            <p>You need to start the server for the data to be available.</p>
+            <el-text>You need to start the server for the data to be available.</el-text>
           </template>
         </el-result>
       </el-card>

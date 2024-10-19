@@ -34,6 +34,7 @@ async function createWindow() {
     titleBarOverlay: true,
     icon: 'packages/main/src/icon.ico',
     webPreferences: {
+      zoomFactor: 1,
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: false, // Sandbox disabled because the demo of preload script depend on the Node.js api
@@ -179,6 +180,12 @@ async function createWindow() {
     }
   });
 
+  ipcMain.handle('stopLogger', async _event => {
+    if (logger) {
+      logger.stop();
+    }
+  });
+
   function getErrorMessage(error: unknown) {
     if (error instanceof Error) return error.message;
     return String(error);
@@ -306,6 +313,12 @@ async function createWindow() {
         result: 'error',
         error: 'Port already in use',
       };
+    }
+  });
+
+  ipcMain.handle('stopScanner', async _event => {
+    if (scanner) {
+      scanner.stop();
     }
   });
 

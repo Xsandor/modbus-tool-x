@@ -2,7 +2,8 @@
   <el-row :gutter="20">
     <el-col
       :span="24"
-      :md="12"
+      :sm="12"
+      :md="10"
       :lg="9"
       :xl="6"
     >
@@ -77,8 +78,14 @@
               :disabled="scanning"
               @click="startScan"
             >
-              Execute
+              Start
             </el-button>
+            <el-button
+              v-if="scanning"
+              type="danger"
+              @click="scanner.stop"
+              >Stop</el-button
+            >
           </el-form-item>
         </el-form>
       </collapsible-card>
@@ -86,7 +93,8 @@
     </el-col>
     <el-col
       :span="24"
-      :md="12"
+      :sm="12"
+      :md="14"
       :lg="15"
       :xl="18"
     >
@@ -319,6 +327,7 @@ const startScan = async () => {
     };
 
     const {error} = await scanner.startRtuScan(config);
+    console.log('Done?');
     if (error) {
       scannerError.value = error;
     } else {
@@ -330,10 +339,11 @@ const startScan = async () => {
       ...modbusStore.scannerConfiguration.tcp,
       minUnitId: modbusStore.scannerConfiguration.common.minUnitId,
       maxUnitId: modbusStore.scannerConfiguration.common.maxUnitId,
-      unitIds: modbusStore.scannerConfiguration.common.unitIds,
+      unitIds: toRaw(modbusStore.scannerConfiguration.common.unitIds),
     };
 
     const {error} = await scanner.startTcpScan(config);
+    console.log('Done?');
     if (error) {
       scannerError.value = error;
     } else {

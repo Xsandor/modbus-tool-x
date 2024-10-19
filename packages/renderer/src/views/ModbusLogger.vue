@@ -87,7 +87,14 @@
               :disabled="inProgress"
               @click="performRequest()"
             >
-              Execute
+              Start
+            </el-button>
+            <el-button
+              v-if="inProgress"
+              type="danger"
+              @click="stop()"
+            >
+              Stop
             </el-button>
           </el-form-item>
         </el-form>
@@ -442,6 +449,11 @@ const performRequest = async () => {
     }
   }
 };
+
+function stop() {
+  logger.stop();
+  inProgress.value = false;
+}
 
 function formatMbOptions(mbOptions: GenericObject[]) {
   if ('addr' in mbOptions && 'count' in mbOptions) {

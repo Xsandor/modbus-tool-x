@@ -104,6 +104,9 @@ export const scanner = {
   startRtuScan: async (config: ModbusRtuScanConfiguration) => {
     return ipcRenderer.invoke('startRtuScan', config);
   },
+  stop: async () => {
+    return ipcRenderer.invoke('stopScanner');
+  },
   onLog: (callback: (event: Electron.IpcRendererEvent, ...args: any[]) => void) => {
     ipcRenderer.on('scanner:log', callback);
   },

@@ -15,6 +15,7 @@ class ModbusLogger extends EventEmitter {
   progress!: number;
   successfulRequests!: number;
   client: ModbusRTU;
+  abort: boolean = false;
 
   constructor() {
     super();
@@ -27,6 +28,10 @@ class ModbusLogger extends EventEmitter {
     if (this.client.isOpen) {
       this.client.close(() => null);
     }
+  }
+
+  stop() {
+    this.abort = true;
   }
 
   protected resetStats() {
@@ -49,7 +54,7 @@ class ModbusLogger extends EventEmitter {
   }
 
   protected async handleTasks(count: number, tasks: ModbusTask[], timeout: number, delay: number) {
-    while (this.countsDone < count) {
+    while (this.countsDone < count && !this.abort) {
       for (const task of tasks) {
         const timestamp = new Date();
 
@@ -63,6 +68,10 @@ class ModbusLogger extends EventEmitter {
         this.reportProgress();
 
         this.reportResult(task, executionTime, result, errorCode, errorText, timestamp);
+
+        if (this.abort) {
+          break;
+        }
 
         await sleep(delay);
       }

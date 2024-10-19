@@ -62,10 +62,13 @@ const template: Electron.MenuItemConstructorOptions[] = [
       {
         role: 'toggleDevTools',
       },
+      {role: 'resetZoom'},
+      {role: 'zoomIn'},
+      {role: 'zoomOut'},
     ],
   },
   {
-    label: 'View',
+    label: 'Help',
     submenu: [
       {
         role: 'about',
