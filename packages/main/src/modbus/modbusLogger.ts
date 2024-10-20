@@ -1,6 +1,6 @@
 import ModbusRTU from 'modbus-serial';
 import {EventEmitter} from 'events';
-import {ERROR_CODE_UNKNOWN, MODBUS_TCP_CONNECT_TIMEOUT} from './modbusCommon';
+import {ERROR_CODE_TIMEOUT, ERROR_CODE_UNKNOWN, MODBUS_TCP_CONNECT_TIMEOUT} from './modbusCommon';
 import {sleep, logger} from './utilities';
 import {modbusRequest} from './modbusRequest';
 
@@ -14,6 +14,7 @@ class ModbusLogger extends EventEmitter {
   countsDone!: number;
   progress!: number;
   successfulRequests!: number;
+  requestsWithException!: number;
   client: ModbusRTU;
   abort: boolean = false;
 
@@ -38,6 +39,7 @@ class ModbusLogger extends EventEmitter {
     this.requestsTotal = 0;
     this.requestsDone = 0;
     this.requestsTimedOut = 0;
+    this.requestsWithException = 0;
     this.totalResponseTime = 0;
     this.countsDone = 0;
     this.progress = 0;
@@ -96,11 +98,13 @@ class ModbusLogger extends EventEmitter {
 
       ({executionTime, errorCode, errorText, result} = requestResult);
 
-      if (errorCode === 408) {
+      if (errorCode === ERROR_CODE_TIMEOUT) {
         this.requestsTimedOut++;
       } else if (!errorCode) {
         this.successfulRequests++;
         this.totalResponseTime += executionTime;
+      } else {
+        this.requestsWithException++;
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
@@ -141,6 +145,7 @@ class ModbusLogger extends EventEmitter {
           ? this.totalResponseTime / this.successfulRequests
           : 0,
         requestsTimedOut: this.requestsTimedOut,
+        requestsWithException: this.requestsWithException,
         requestsDone: this.requestsDone,
         requestsTotal: this.requestsTotal,
         progress: this.progress,

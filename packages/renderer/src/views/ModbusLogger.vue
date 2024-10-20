@@ -142,7 +142,6 @@
               >
                 <span>{{ stats.successfulRequests }} / {{ stats.requestsDone }}</span>
               </el-progress>
-              <!-- ({{ stats.successfulRequests }} out of {{ stats.requestsDone }}) -->
             </el-descriptions-item>
             <el-descriptions-item label="Timeouts">
               <el-progress
@@ -151,7 +150,14 @@
               >
                 <span>{{ stats.requestsTimedOut }} / {{ stats.requestsDone }}</span>
               </el-progress>
-              <!-- ({{ stats.requestsTimedOut }} out of {{ stats.requestsDone }}) -->
+            </el-descriptions-item>
+            <el-descriptions-item label="Exceptions">
+              <el-progress
+                :percentage="statsExceptionPct"
+                :color="colorBadProgress"
+              >
+                <span>{{ stats.requestsWithException }} / {{ stats.requestsDone }}</span>
+              </el-progress>
             </el-descriptions-item>
             <el-descriptions-item label="Average response">
               {{ stats.averageResponseTime.toFixed(0) }} ms
@@ -272,20 +278,28 @@ const stats: Ref<LogStats> = ref({
   averageResponseTime: 0,
   successfulRequests: 0,
   requestsTimedOut: 0,
+  requestsWithException: 0,
   requestsDone: 0,
   requestsTotal: 0,
   progress: 0,
 });
 
-const statsSuccessPct = computed(() => {
-  if (!stats.value.requestsDone) return 0;
-  return (stats.value.successfulRequests / stats.value.requestsDone) * 100;
-});
+function calcPercentage(numerator: number, denominator: number) {
+  if (!denominator) return 0;
+  return (numerator / denominator) * 100;
+}
 
-const statsTimedOutPct = computed(() => {
-  if (!stats.value.requestsDone) return 0;
-  return (stats.value.requestsTimedOut / stats.value.requestsDone) * 100;
-});
+const statsSuccessPct = computed(() =>
+  calcPercentage(stats.value.successfulRequests, stats.value.requestsDone),
+);
+
+const statsTimedOutPct = computed(() =>
+  calcPercentage(stats.value.requestsTimedOut, stats.value.requestsDone),
+);
+
+const statsExceptionPct = computed(() =>
+  calcPercentage(stats.value.requestsWithException, stats.value.requestsDone),
+);
 
 const colorGoodProgress = [
   {color: '#f56c6c', percentage: 0},
@@ -317,6 +331,7 @@ function clearLog() {
     averageResponseTime: 0,
     successfulRequests: 0,
     requestsTimedOut: 0,
+    requestsWithException: 0,
     requestsDone: 0,
     requestsTotal: 0,
     progress: 0,

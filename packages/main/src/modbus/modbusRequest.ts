@@ -7,6 +7,7 @@ import {
   MB_FUNCTION,
   MODBUS_TCP_CONNECT_TIMEOUT,
   REGISTER_OFFSET,
+  ERROR_CODE_TIMEOUT,
 } from './modbusCommon';
 import {
   DANFOSS_MCX_APP_PNU,
@@ -218,6 +219,7 @@ export async function modbusRequest(
         );
 
         log.info(result);
+        result = {json: result.data};
         break;
       case MB_FUNCTION.READ_COMPRESSED:
         {
@@ -252,7 +254,7 @@ export async function modbusRequest(
       errorCode = err.modbusCode as number;
       errorText = err.message;
     } else if (err.name === 'TransactionTimedOutError') {
-      errorCode = 408;
+      errorCode = ERROR_CODE_TIMEOUT;
       errorText = 'Timeout: No response from device';
     } else {
       errorCode = ERROR_CODE_UNKNOWN;
@@ -322,7 +324,7 @@ export async function modbusTcpRequest(
     return {
       result: null,
       executionTime: MODBUS_TCP_CONNECT_TIMEOUT,
-      errorCode: 408,
+      errorCode: ERROR_CODE_TIMEOUT,
       errorText: 'Timeout: Failed to establish connection',
       timestamp: new Date(),
     };

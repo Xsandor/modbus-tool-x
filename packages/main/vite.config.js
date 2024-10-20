@@ -38,6 +38,13 @@ const config = {
     reportCompressedSize: false,
   },
   plugins: [injectAppVersion()],
+  css: {
+    preprocessorOptions: {
+      scss: {
+        api: 'modern-compiler',
+      },
+    },
+  },
 };
 
 export default config;

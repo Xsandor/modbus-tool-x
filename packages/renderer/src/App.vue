@@ -34,14 +34,17 @@
     <el-icon
       :size="18"
       :class="isDark ? 'icon-dark' : 'icon-light'"
-      ><ElIconMoon v-if="!isDark" /><ElIconSunny v-else
-    /></el-icon>
+    >
+      <ElIconMoon v-if="!isDark" />
+      <ElIconSunny v-else />
+    </el-icon>
   </el-button>
 </template>
 
 <script lang="ts" setup>
 import {useDark} from '@vueuse/core';
 import {network, titleBar} from '#preload';
+import {useModbusStore} from '/@/stores/useModbus';
 import {useSystemStore} from '/@/stores/useSystem';
 import {useTabsStore} from '/@/stores/useTabs';
 
@@ -109,6 +112,7 @@ const loading = ref(true);
 
 const tabsStore = useTabsStore();
 const systemStore = useSystemStore();
+const modbusStore = useModbusStore();
 
 function setupTabHandling() {
   window.addEventListener('keydown', event => {
@@ -155,7 +159,10 @@ onMounted(() => {
 });
 
 network.onInfo((_event, netInfo) => {
+  // console.log('Received network info:', netInfo);
   systemStore.networkInfo = netInfo;
+  modbusStore.scannerConfiguration.tcp.startIp = netInfo.firstIpOnSubnet;
+  modbusStore.scannerConfiguration.tcp.endIp = netInfo.lastIpOnSubnet;
   loading.value = false;
 });
 

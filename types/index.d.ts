@@ -32,6 +32,7 @@ interface LogStats {
   averageResponseTime: number;
   successfulRequests: number;
   requestsTimedOut: number;
+  requestsWithException: number;
   requestsDone: number;
   requestsTotal: number;
   progress: number;

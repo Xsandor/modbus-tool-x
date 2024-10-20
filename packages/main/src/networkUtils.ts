@@ -44,7 +44,14 @@ export function getNetworkInfo(): Promise<NetworkInfo> {
         return reject(err);
       }
 
-      if (!list.length) return reject('No active network interface found');
+      if (!list.length) {
+        console.log('No active network interface found');
+        return reject('No active network interface found');
+      }
+
+      // console.log('Network interfaces:');
+      // console.log(list);
+
       let activeInterface = list[0];
 
       const interfaceWithIp = list.find(
@@ -55,7 +62,8 @@ export function getNetworkInfo(): Promise<NetworkInfo> {
         activeInterface = interfaceWithIp;
       }
 
-      // console.log(activeInterface);
+      console.log('Active network interface:');
+      console.log(activeInterface);
 
       const iface = activeInterface.name;
       const ipAddress = activeInterface.ip_address;

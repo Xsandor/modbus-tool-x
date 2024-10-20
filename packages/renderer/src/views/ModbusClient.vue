@@ -95,14 +95,21 @@
                 :title="capitalize(name.toString())"
                 :column="1"
                 :border="true"
-                style="max-width: 300px"
+                style="max-width: 300px; margin-bottom: 2em"
               >
-                <el-descriptions-item
-                  v-for="(value, key) in item"
-                  :key="key"
-                  :label="capitalize(key.toString())"
-                  >{{ value }}</el-descriptions-item
-                >
+                <template v-if="typeof item === 'object'">
+                  <el-descriptions-item
+                    v-for="(value, key) in item"
+                    :key="key"
+                    :label="capitalize(key.toString())"
+                    >{{ value }}</el-descriptions-item
+                  >
+                </template>
+                <template v-else>
+                  <el-descriptions-item label="Value">
+                    {{ item }}
+                  </el-descriptions-item>
+                </template>
               </el-descriptions>
             </template>
             <template v-if="response.result.text">

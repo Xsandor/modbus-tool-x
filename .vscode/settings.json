@@ -1,3 +1,19 @@
 {
-  "editor.formatOnSave": true,
+  "editor.formatOnSave": false,
+  "files.exclude": {
+    ".github": true,
+    ".idea": true,
+    ".vscode": true
+  },
+  "eslint.format.enable": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact",
+    "vue" // Add support for Vue files
+  ]
 }

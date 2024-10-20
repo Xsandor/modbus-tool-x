@@ -230,6 +230,11 @@ class ModbusServer extends EventEmitter {
           'read',
         );
 
+        // return a random exception to test error handling
+        const possibleErrors = [ILLEGAL_ADDRESS_ERROR, ILLEGAL_VALUE_ERROR];
+        const randomError = possibleErrors[Math.floor(Math.random() * possibleErrors.length)];
+        return cb(randomError, [0]);
+
         if (
           TYPE_EKC &&
           [2060, 2061, 5002, 1707, 12, 258, 264, 1025, 115, 21].includes(

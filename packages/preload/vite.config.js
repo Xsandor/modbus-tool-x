@@ -34,6 +34,13 @@ const config = {
     reportCompressedSize: false,
   },
   plugins: [preload.vite(), injectAppVersion()],
+  css: {
+    preprocessorOptions: {
+      scss: {
+        api: 'modern-compiler',
+      },
+    },
+  },
 };
 
 export default config;

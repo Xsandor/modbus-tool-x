@@ -46,6 +46,13 @@ const config = {
     emptyOutDir: true,
     reportCompressedSize: false,
   },
+  css: {
+    preprocessorOptions: {
+      scss: {
+        api: 'modern-compiler',
+      },
+    },
+  },
   test: {
     environment: 'happy-dom',
   },

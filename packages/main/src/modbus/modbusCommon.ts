@@ -5,6 +5,7 @@ export const REGISTER_OFFSET = -1;
 export const EXCEPTION_CODE = 0x80;
 
 export const ERROR_CODE_UNKNOWN = 999;
+export const ERROR_CODE_TIMEOUT = 408;
 
 export const MAX_COILS = 65536;
 export const MAX_DISCRETE_INPUTS = 65536;

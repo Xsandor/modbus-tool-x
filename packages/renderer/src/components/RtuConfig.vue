@@ -13,6 +13,17 @@
         :label="item.path"
         :value="item.path"
       ></el-option>
+      <template #footer>
+        <el-button
+          :disabled="isRefreshingComPorts"
+          text
+          bg
+          size="small"
+          @click="refreshComPorts"
+        >
+          Refresh list
+        </el-button>
+      </template>
     </el-select>
   </el-form-item>
   <el-form-item
@@ -88,7 +99,8 @@
 import {useSystemStore} from '/@/stores/useSystem';
 import {useModbusStore} from '/@/stores/useModbus';
 
-const {comPorts} = useSystemStore();
+const {comPorts, refreshComPorts, isRefreshingComPorts} = useSystemStore();
+
 const {baudRateOptions, parityOptions} = useModbusStore();
 
 const props = defineProps({
