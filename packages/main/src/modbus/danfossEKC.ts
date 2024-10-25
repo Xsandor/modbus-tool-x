@@ -19,7 +19,7 @@ import {
   parseDanfossParameter,
   parseDanfossVersion,
 } from './danfoss';
-import {clone, logger, splitArrayIntoBatches} from './utilities';
+import {clone, int16ToUint16, logger, splitArrayIntoBatches} from './utilities';
 import {REGISTER_OFFSET} from './modbusCommon';
 
 const log = logger.createLogger('Danfoss EKC');
@@ -277,7 +277,7 @@ export class DanfossEKC extends EventEmitter {
   }
 
   async writeParameter(pnu: number, value: number) {
-    const result = await this.client.writeRegister(pnu + REGISTER_OFFSET, value);
+    const result = await this.client.writeRegister(pnu + REGISTER_OFFSET, int16ToUint16(value));
     this.emitParameterData({[pnu]: value});
     return result;
   }

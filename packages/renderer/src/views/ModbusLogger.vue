@@ -360,11 +360,19 @@ function addTask() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const options = tabData.value.common.mbFunctionParameters.reduce(
     (acc: GenericObject, item: MbFunctionParameter) => {
+      if (item.type === 'numberArray') {
+        // only use values that are are numbers above 0
+        acc[item.id] = item.values?.filter(i => typeof i === 'number' && i >= 0);
+        return acc;
+      }
+
       acc[item.id] = item.value;
       return acc;
     },
     {},
   );
+
+  console.log(options);
 
   const task: ModbusTask = {
     unitId: tabData.value.common.unitId,
@@ -373,6 +381,8 @@ function addTask() {
       ...options,
     },
   };
+
+  console.log(task);
 
   tasks.value.push(task);
 }

@@ -259,7 +259,7 @@ const performRequest = async () => {
     {},
   );
 
-  // console.log(options);
+  console.log(options);
 
   const task: ModbusTask = {
     unitId: tabData.value.common.unitId,
@@ -269,7 +269,7 @@ const performRequest = async () => {
     },
   };
 
-  // console.log(task);
+  console.log(task);
 
   if (tabData.value.connectionType === CONNECTION_TYPE.TCP) {
     const configuration = {

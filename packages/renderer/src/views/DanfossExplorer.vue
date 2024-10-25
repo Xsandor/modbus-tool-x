@@ -4,7 +4,7 @@
       :span="24"
       :sm="12"
       :md="10"
-      :lg="9"
+      :lg="8"
       :xl="6"
     >
       <collapsible-card title="Danfoss Explorer">
@@ -26,16 +26,19 @@
           </el-form-item>
           <el-form-item>
             <el-button
+              v-if="initiated"
               :disabled="!initiated"
               @click="disconnect"
             >
               Disconnect
             </el-button>
             <el-button
+              v-if="!initiated"
               type="primary"
+              :disabled="initiating || initiated"
               @click="initiate"
             >
-              Connect
+              {{ initiating ? 'Connecting' : 'Connect' }}
             </el-button>
           </el-form-item>
         </el-form>
@@ -100,14 +103,17 @@
               :label="group.name"
             >
               <el-row :gutter="20">
-                <el-col :span="12">
+                <el-col
+                  :span="24"
+                  :xl="12"
+                >
                   <el-card
                     header="Status"
                     shadow="never"
                   >
                     <el-table
                       :data="parametersInGroup(group.id, false)"
-                      height="500"
+                      height="max(calc(100vh - 420px), 500px)"
                     >
                       <el-table-column type="expand">
                         <template #default="props">
@@ -152,11 +158,11 @@
                       <el-table-column
                         prop="name"
                         label="Name"
-                        width="250"
+                        min-width="250"
                       />
                       <el-table-column
                         label="Value"
-                        width="250"
+                        width="150"
                       >
                         <template #default="scope">
                           {{ formattedParameterValue(scope.row) }}
@@ -165,14 +171,17 @@
                     </el-table>
                   </el-card>
                 </el-col>
-                <el-col :span="12">
+                <el-col
+                  :span="24"
+                  :xl="12"
+                >
                   <el-card
                     header="Settings"
                     shadow="never"
                   >
                     <el-table
                       :data="parametersInGroup(group.id, true)"
-                      height="500"
+                      height="max(calc(100vh - 420px), 500px)"
                     >
                       <el-table-column type="expand">
                         <template #default="props">
@@ -217,11 +226,11 @@
                       <el-table-column
                         prop="name"
                         label="Name"
-                        width="250"
+                        min-width="250"
                       />
                       <el-table-column
                         label="Value"
-                        width="250"
+                        width="150"
                       >
                         <template #default="scope">
                           <el-button
@@ -368,7 +377,8 @@ Valid range: ${parameter.min * 10 ** parameter.exp} to ${parameter.max * 10 ** p
           done();
           instance.confirmButtonLoading = false;
           toast(`Parameter changed successfully`, 'success');
-        } catch (_error) {
+        } catch (error) {
+          console.log(error);
           toast('Failed to change parameter', 'error');
           done();
           instance.confirmButtonLoading = false;

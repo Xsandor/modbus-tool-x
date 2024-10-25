@@ -2,7 +2,7 @@
   "name": "modbus-tool-x",
   "productName": "Modbus Tool X",
   "description": "A universal tool for modbus related tasks",
-  "version": "0.4.12",
+  "version": "0.4.13",
   "private": true,
   "author": {
     "email": "alex@karlborgselkontroll.se",
