@@ -114,7 +114,14 @@
               :size="'small'"
               @click="exportLog"
             >
-              Export <el-icon class="el-icon--right"><i-ep-download /></el-icon>
+              .CSV <el-icon class="el-icon--right"><i-ep-download /></el-icon>
+            </el-button>
+            <el-button
+              v-if="results.length"
+              :size="'small'"
+              @click="exportLog"
+            >
+              Report <el-icon class="el-icon--right"><i-ep-download /></el-icon>
             </el-button>
           </div>
         </template>
@@ -199,6 +206,12 @@ import {useTabsStore} from '/@/stores/useTabs';
 import useCSV from '/@/components/useCSV';
 import {CONNECTION_TYPE, useModbusStore} from '/@/stores/useModbus';
 import {clone} from '../helpers/utilities';
+import {generateDocDefinition} from './TestReport';
+import * as pdfMake from 'pdfmake/build/pdfmake';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import * as pdfFonts from 'pdfmake/build/vfs_fonts';
+
+// (<any>pdfMake).vfs = pdfFonts.pdfMake.vfs;
 
 const {saveCSV} = useCSV();
 // import useToast from '/@/components/useToast'
@@ -383,6 +396,24 @@ function clearTasks() {
 
 //   return `${successPercent}% success (${succeededRequests} / ${results.value.length})`;
 // });
+
+function exportReport() {
+  const docDefinition = generateDocDefinition();
+  pdfMake
+    .createPdf(docDefinition, undefined, {
+      // download default Roboto font from cdnjs.com
+      Roboto: {
+        normal:
+          'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto/Roboto-Regular.ttf',
+        bold: 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto/Roboto-Medium.ttf',
+        italics:
+          'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto/Roboto-Italic.ttf',
+        bolditalics:
+          'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto/Roboto-MediumItalic.ttf',
+      },
+    })
+    .download();
+}
 
 function exportLog() {
   const formattedList = results.value.map(i => {

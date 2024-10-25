@@ -244,6 +244,7 @@ export const useModbusStore = defineStore(
       {value: 19200, label: '19 200'},
       {value: 38400, label: '38 400'},
       {value: 57600, label: '57 600'},
+      {value: 115200, label: '115 200'},
     ]);
 
     const parityOptions = computed(() => [
