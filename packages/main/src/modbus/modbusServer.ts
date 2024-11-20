@@ -38,7 +38,8 @@ const log = logger.createLogger('Modbus Server');
 
 const TYPE_EKC = false;
 const MHI_SIMULATOR = false;
-const DEBUG_VALUES = true;
+const DEBUG_VALUES = false;
+const RANDOM_EXCEPTIONS = false;
 
 // const ekc_model = '084B8014';
 // const ekc_family = '';
@@ -230,10 +231,12 @@ class ModbusServer extends EventEmitter {
           'read',
         );
 
-        // return a random exception to test error handling
-        const possibleErrors = [ILLEGAL_ADDRESS_ERROR, ILLEGAL_VALUE_ERROR];
-        const randomError = possibleErrors[Math.floor(Math.random() * possibleErrors.length)];
-        return cb(randomError, [0]);
+        if (RANDOM_EXCEPTIONS) {
+          // return a random exception to test error handling
+          const possibleErrors = [ILLEGAL_ADDRESS_ERROR, ILLEGAL_VALUE_ERROR];
+          const randomError = possibleErrors[Math.floor(Math.random() * possibleErrors.length)];
+          return cb(randomError, [0]);
+        }
 
         if (
           TYPE_EKC &&
